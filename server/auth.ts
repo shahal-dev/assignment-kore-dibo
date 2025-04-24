@@ -100,15 +100,6 @@ export function setupAuth(app: Express) {
       await sendVerificationEmail(validatedData.email, code);
 
       res.status(200).json({ message: "Verification code sent" });
-
-      // Remove password from response
-      const { password, ...userWithoutPassword } = user;
-
-      // Log the user in
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(userWithoutPassword);
-      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid user data", errors: error.errors });
