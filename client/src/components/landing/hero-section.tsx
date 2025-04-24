@@ -1,3 +1,4 @@
+
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import SubmissionBox from "./submission-box";
