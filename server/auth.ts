@@ -186,40 +186,17 @@ export function setupAuth(app: Express) {
       const user = await storage.createVerifiedUser(userData);
       await storage.markVerificationCodeUsed(verificationCode.id);
       
-      // Log user in
-      req.login(user, (err) => {
-        if (err) {
-          return res.status(500).json({ message: "Login failed after verification" });
-        }
-        const { password, ...userWithoutPassword } = user;
-        res.status(200).json(userWithoutPassword);
+      // Log user in using a promise wrapper
+      await new Promise<void>((resolve, reject) => {
+        req.login(user, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
       });
+
+      const { password, ...userWithoutPassword } = user;
+      res.status(200).json(userWithoutPassword);
     } catch (error) {
       res.status(500).json({ message: "Verification failed" });
     }
   });
-
-    const verificationCode = await storage.getVerificationCode(email, code);
-    if (!verificationCode || verificationCode.used || new Date() > verificationCode.expiresAt) {
-      return res.status(400).json({ message: "Invalid or expired code" });
-    }
-
-    const userData = await storage.getUnverifiedUser(email);
-    if (!userData) {
-      return res.status(400).json({ message: "No registration found" });
-    }
-
-    // Create verified user
-    const user = await storage.createVerifiedUser(userData);
-    await storage.markVerificationCodeUsed(verificationCode.id);
-    
-    // Log user in
-    req.login(user, (err) => {
-      if (err) return next(err);
-      const { password, ...userWithoutPassword } = user;
-      res.status(200).json(userWithoutPassword);
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Verification failed" });
-  }
-});
