@@ -40,12 +40,12 @@ export default function Navbar() {
                 <Link href="/auth" className="px-3 py-2 rounded-md text-sm font-medium text-primary-600 hover:text-primary-700">
                   Sign In
                 </Link>
-                <Link href="/auth?tab=register" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+                <Link href="/auth?tab=register" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
                   Sign Up
                 </Link>
               </>
             ) : (
-              <Link href={`/dashboard/${user.userType}`} className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+              <Link href={`/dashboard/${user.userType}`} className="px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
                 Dashboard
               </Link>
             )}
@@ -87,12 +87,12 @@ export default function Navbar() {
                 <Link href="/auth" className="block px-3 py-2 rounded-md text-base font-medium text-primary-600 hover:text-primary-700">
                   Sign In
                 </Link>
-                <Link href="/auth?tab=register" className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-primary-600 hover:bg-primary-700 py-3 mt-2">
+                <Link href="/auth?tab=register" className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-blue-600 hover:bg-blue-700 py-3 mt-2">
                   Sign Up
                 </Link>
               </>
             ) : (
-              <Link href={`/dashboard/${user.userType}`} className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-primary-600 hover:bg-primary-700 py-3 mt-2">
+              <Link href={`/dashboard/${user.userType}`} className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-blue-600 hover:bg-blue-700 py-3 mt-2">
                 Dashboard
               </Link>
             )}
