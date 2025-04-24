@@ -36,7 +36,7 @@ export const users = pgTable("users", {
   fullName: text("full_name").notNull(),
   email: text("email").notNull().unique(),
   userType: text("user_type", { enum: userTypes }).notNull(),
-  verified: boolean("verified").default(false),
+  isVerified: boolean("is_verified").default(false),
   bio: text("bio"),
   skills: text("skills").array(),
   profileImage: text("profile_image"),

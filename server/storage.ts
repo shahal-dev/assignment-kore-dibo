@@ -120,7 +120,7 @@ export class DatabaseStorage implements IStorage {
         ...insertUser, 
         rating: 0, 
         reviewCount: 0,
-        verified: true
+        isVerified: true
       })
       .returning();
     return user;
