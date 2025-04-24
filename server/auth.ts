@@ -167,8 +167,8 @@ export function setupAuth(app: Express) {
         res.status(500).json({ message: "Failed to update user" });
       });
   });
-}
-app.post("/api/verify", async (req, res) => {
+
+  app.post("/api/verify", async (req, res, next) => {
   try {
     const { email, code } = req.body;
 
