@@ -101,8 +101,8 @@ export default function BrowseAssignmentsSection() {
                 <div className="p-6">
                   <div className="flex justify-between items-start">
                     <h3 className="text-lg font-semibold text-gray-900">
-                      <Link href={`/assignments/${assignment.id}`}>
-                        <a className="hover:text-primary-600 transition-colors">{assignment.title}</a>
+                      <Link href={`/assignments/${assignment.id}`} className="hover:text-primary-600 transition-colors">
+                        {assignment.title}
                       </Link>
                     </h3>
                     <Badge>
