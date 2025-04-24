@@ -16,9 +16,12 @@ import {
   type InsertReview,
 } from "@shared/schema";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import { db } from "./db";
+import { eq, and, desc, asc, or, sql } from "drizzle-orm";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User operations
@@ -61,291 +64,290 @@ export interface IStorage {
   getReviewsByAssignmentId(assignmentId: number): Promise<Review[]>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private assignments: Map<number, Assignment>;
-  private bids: Map<number, Bid>;
-  private messages: Map<number, Message>;
-  private reviews: Map<number, Review>;
-  sessionStore: session.SessionStore;
-  
-  private userCurrentId: number;
-  private assignmentCurrentId: number;
-  private bidCurrentId: number;
-  private messageCurrentId: number;
-  private reviewCurrentId: number;
+export class DatabaseStorage implements IStorage {
+  sessionStore: any;
 
   constructor() {
-    this.users = new Map();
-    this.assignments = new Map();
-    this.bids = new Map();
-    this.messages = new Map();
-    this.reviews = new Map();
-    
-    this.userCurrentId = 1;
-    this.assignmentCurrentId = 1;
-    this.bidCurrentId = 1;
-    this.messageCurrentId = 1;
-    this.reviewCurrentId = 1;
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // 24 hours
-    });
+    this.sessionStore = new PostgresSessionStore({ pool, createTableIfMissing: true });
   }
 
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email === email,
-    );
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userCurrentId++;
-    const user: User = { ...insertUser, id, rating: 0, reviewCount: 0 };
-    this.users.set(id, user);
+    const [user] = await db.insert(users)
+      .values({ 
+        ...insertUser, 
+        rating: 0, 
+        reviewCount: 0 
+      })
+      .returning();
     return user;
   }
 
   async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {
-    const user = await this.getUser(id);
-    if (!user) return undefined;
-
-    const updatedUser = { ...user, ...userData };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    const [user] = await db.update(users)
+      .set(userData)
+      .where(eq(users.id, id))
+      .returning();
+    return user;
   }
 
   async getHelpers(): Promise<User[]> {
-    return Array.from(this.users.values()).filter(
-      (user) => user.userType === 'helper'
-    );
+    return await db.select()
+      .from(users)
+      .where(eq(users.userType, 'helper'));
   }
 
   async getTopHelpers(limit: number): Promise<User[]> {
-    return Array.from(this.users.values())
-      .filter(user => user.userType === 'helper')
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, limit);
+    return await db.select()
+      .from(users)
+      .where(eq(users.userType, 'helper'))
+      .orderBy(desc(users.rating))
+      .limit(limit);
   }
 
   // Assignment operations
   async getAssignment(id: number): Promise<Assignment | undefined> {
-    return this.assignments.get(id);
+    const [assignment] = await db.select()
+      .from(assignments)
+      .where(eq(assignments.id, id));
+    return assignment;
   }
 
   async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
-    const id = this.assignmentCurrentId++;
-    const assignment: Assignment = {
-      ...insertAssignment,
-      id,
-      isOpen: true,
-      helperId: null,
-      createdAt: new Date(),
-      status: 'open',
-    };
-    this.assignments.set(id, assignment);
+    const [assignment] = await db.insert(assignments)
+      .values({
+        ...insertAssignment,
+        isOpen: true,
+        helperId: null,
+        status: 'open',
+      })
+      .returning();
     return assignment;
   }
 
   async updateAssignment(id: number, assignmentData: Partial<Assignment>): Promise<Assignment | undefined> {
-    const assignment = await this.getAssignment(id);
-    if (!assignment) return undefined;
-
-    const updatedAssignment = { ...assignment, ...assignmentData };
-    this.assignments.set(id, updatedAssignment);
-    return updatedAssignment;
+    const [assignment] = await db.update(assignments)
+      .set(assignmentData)
+      .where(eq(assignments.id, id))
+      .returning();
+    return assignment;
   }
 
   async getAssignments(filters?: Partial<Assignment>): Promise<Assignment[]> {
-    let assignments = Array.from(this.assignments.values());
+    let query = db.select().from(assignments);
     
     if (filters) {
-      assignments = assignments.filter(assignment => {
-        return Object.entries(filters).every(([key, value]) => {
-          return assignment[key as keyof Assignment] === value;
-        });
-      });
+      const conditions = [];
+      
+      if (filters.isOpen !== undefined) {
+        conditions.push(eq(assignments.isOpen, filters.isOpen));
+      }
+      
+      if (filters.studentId !== undefined) {
+        conditions.push(eq(assignments.studentId, filters.studentId));
+      }
+      
+      if (filters.helperId !== undefined) {
+        conditions.push(eq(assignments.helperId, filters.helperId));
+      }
+      
+      if (filters.status !== undefined) {
+        conditions.push(eq(assignments.status, filters.status));
+      }
+      
+      if (filters.category !== undefined) {
+        conditions.push(eq(assignments.category, filters.category));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
     }
     
-    return assignments.sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return await query.orderBy(desc(assignments.createdAt));
   }
 
   async getRecentAssignments(limit: number): Promise<Assignment[]> {
-    return Array.from(this.assignments.values())
-      .filter(assignment => assignment.isOpen)
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .slice(0, limit);
+    return await db.select()
+      .from(assignments)
+      .where(eq(assignments.isOpen, true))
+      .orderBy(desc(assignments.createdAt))
+      .limit(limit);
   }
 
   async getAssignmentsByStudentId(studentId: number): Promise<Assignment[]> {
-    return Array.from(this.assignments.values())
-      .filter(assignment => assignment.studentId === studentId)
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+    return await db.select()
+      .from(assignments)
+      .where(eq(assignments.studentId, studentId))
+      .orderBy(desc(assignments.createdAt));
   }
 
   async getAssignmentsByHelperId(helperId: number): Promise<Assignment[]> {
-    return Array.from(this.assignments.values())
-      .filter(assignment => assignment.helperId === helperId)
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+    return await db.select()
+      .from(assignments)
+      .where(eq(assignments.helperId, helperId))
+      .orderBy(desc(assignments.createdAt));
   }
 
   // Bid operations
   async getBid(id: number): Promise<Bid | undefined> {
-    return this.bids.get(id);
+    const [bid] = await db.select()
+      .from(bids)
+      .where(eq(bids.id, id));
+    return bid;
   }
 
   async createBid(insertBid: InsertBid): Promise<Bid> {
-    const id = this.bidCurrentId++;
-    const bid: Bid = {
-      ...insertBid,
-      id,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    this.bids.set(id, bid);
+    const [bid] = await db.insert(bids)
+      .values({
+        ...insertBid,
+        status: 'pending',
+      })
+      .returning();
     return bid;
   }
 
   async updateBid(id: number, bidData: Partial<Bid>): Promise<Bid | undefined> {
-    const bid = await this.getBid(id);
-    if (!bid) return undefined;
-
-    const updatedBid = { ...bid, ...bidData };
-    this.bids.set(id, updatedBid);
-    return updatedBid;
+    const [bid] = await db.update(bids)
+      .set(bidData)
+      .where(eq(bids.id, id))
+      .returning();
+    return bid;
   }
 
   async getBidsByAssignmentId(assignmentId: number): Promise<Bid[]> {
-    return Array.from(this.bids.values())
-      .filter(bid => bid.assignmentId === assignmentId)
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+    return await db.select()
+      .from(bids)
+      .where(eq(bids.assignmentId, assignmentId))
+      .orderBy(desc(bids.createdAt));
   }
 
   async getBidsByHelperId(helperId: number): Promise<Bid[]> {
-    return Array.from(this.bids.values())
-      .filter(bid => bid.helperId === helperId)
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+    return await db.select()
+      .from(bids)
+      .where(eq(bids.helperId, helperId))
+      .orderBy(desc(bids.createdAt));
   }
 
   async getBidCountByAssignmentId(assignmentId: number): Promise<number> {
-    return (await this.getBidsByAssignmentId(assignmentId)).length;
+    const result = await db.select({ count: sql`count(*)` })
+      .from(bids)
+      .where(eq(bids.assignmentId, assignmentId));
+    return Number(result[0].count);
   }
 
   // Message operations
   async getMessage(id: number): Promise<Message | undefined> {
-    return this.messages.get(id);
+    const [message] = await db.select()
+      .from(messages)
+      .where(eq(messages.id, id));
+    return message;
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const id = this.messageCurrentId++;
-    const message: Message = {
-      ...insertMessage,
-      id,
-      createdAt: new Date(),
-      isRead: false,
-    };
-    this.messages.set(id, message);
+    const [message] = await db.insert(messages)
+      .values({
+        ...insertMessage,
+        isRead: false,
+      })
+      .returning();
     return message;
   }
 
   async getMessagesByUserId(userId: number): Promise<Message[]> {
-    return Array.from(this.messages.values())
-      .filter(message => 
-        message.senderId === userId || message.receiverId === userId
+    return await db.select()
+      .from(messages)
+      .where(
+        or(
+          eq(messages.senderId, userId),
+          eq(messages.receiverId, userId)
+        )
       )
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      .orderBy(desc(messages.createdAt));
   }
 
   async getConversation(user1Id: number, user2Id: number): Promise<Message[]> {
-    return Array.from(this.messages.values())
-      .filter(message => 
-        (message.senderId === user1Id && message.receiverId === user2Id) ||
-        (message.senderId === user2Id && message.receiverId === user1Id)
+    return await db.select()
+      .from(messages)
+      .where(
+        or(
+          and(
+            eq(messages.senderId, user1Id),
+            eq(messages.receiverId, user2Id)
+          ),
+          and(
+            eq(messages.senderId, user2Id),
+            eq(messages.receiverId, user1Id)
+          )
+        )
       )
-      .sort((a, b) => 
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
+      .orderBy(asc(messages.createdAt));
   }
 
   async markMessageAsRead(id: number): Promise<Message | undefined> {
-    const message = await this.getMessage(id);
-    if (!message) return undefined;
-
-    const updatedMessage = { ...message, isRead: true };
-    this.messages.set(id, updatedMessage);
-    return updatedMessage;
+    const [message] = await db.update(messages)
+      .set({ isRead: true })
+      .where(eq(messages.id, id))
+      .returning();
+    return message;
   }
 
   // Review operations
   async getReview(id: number): Promise<Review | undefined> {
-    return this.reviews.get(id);
+    const [review] = await db.select()
+      .from(reviews)
+      .where(eq(reviews.id, id));
+    return review;
   }
 
   async createReview(insertReview: InsertReview): Promise<Review> {
-    const id = this.reviewCurrentId++;
-    const review: Review = {
-      ...insertReview,
-      id,
-      createdAt: new Date(),
-    };
-    this.reviews.set(id, review);
+    const [review] = await db.insert(reviews)
+      .values(insertReview)
+      .returning();
     
-    // Update helper rating
-    const helper = await this.getUser(insertReview.helperId);
-    if (helper) {
-      const helperReviews = await this.getReviewsByHelperId(insertReview.helperId);
-      const totalRating = helperReviews.reduce((sum, review) => sum + review.rating, 0);
-      const updatedHelper = {
-        ...helper,
+    // Update helper rating and review count
+    const helperReviews = await this.getReviewsByHelperId(insertReview.helperId);
+    const totalRating = helperReviews.reduce((sum, review) => sum + review.rating, 0);
+    await db.update(users)
+      .set({ 
         rating: Math.round(totalRating / helperReviews.length),
-        reviewCount: helperReviews.length,
-      };
-      this.users.set(helper.id, updatedHelper);
-    }
+        reviewCount: helperReviews.length
+      })
+      .where(eq(users.id, insertReview.helperId));
     
     return review;
   }
 
   async getReviewsByHelperId(helperId: number): Promise<Review[]> {
-    return Array.from(this.reviews.values())
-      .filter(review => review.helperId === helperId)
-      .sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+    return await db.select()
+      .from(reviews)
+      .where(eq(reviews.helperId, helperId))
+      .orderBy(desc(reviews.createdAt));
   }
 
   async getReviewsByAssignmentId(assignmentId: number): Promise<Review[]> {
-    return Array.from(this.reviews.values())
-      .filter(review => review.assignmentId === assignmentId);
+    return await db.select()
+      .from(reviews)
+      .where(eq(reviews.assignmentId, assignmentId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

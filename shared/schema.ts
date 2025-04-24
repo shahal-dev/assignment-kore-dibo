@@ -1,5 +1,6 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { relations } from "drizzle-orm";
 import { z } from "zod";
 
 export const userTypes = ['student', 'helper'] as const;
@@ -146,3 +147,70 @@ export type Message = typeof messages.$inferSelect;
 
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type Review = typeof reviews.$inferSelect;
+
+// Relationships
+export const usersRelations = relations(users, ({ many }) => ({
+  assignmentsAsStudent: many(assignments, { relationName: 'student_assignments' }),
+  assignmentsAsHelper: many(assignments, { relationName: 'helper_assignments' }),
+  bids: many(bids),
+  receivedReviews: many(reviews, { relationName: 'helper_reviews' }),
+  givenReviews: many(reviews, { relationName: 'student_reviews' }),
+  sentMessages: many(messages, { relationName: 'sent_messages' }),
+  receivedMessages: many(messages, { relationName: 'received_messages' }),
+}));
+
+export const assignmentsRelations = relations(assignments, ({ one, many }) => ({
+  student: one(users, {
+    fields: [assignments.studentId],
+    references: [users.id],
+    relationName: 'student_assignments',
+  }),
+  helper: one(users, {
+    fields: [assignments.helperId],
+    references: [users.id],
+    relationName: 'helper_assignments',
+  }),
+  bids: many(bids),
+  reviews: many(reviews),
+}));
+
+export const bidsRelations = relations(bids, ({ one }) => ({
+  assignment: one(assignments, {
+    fields: [bids.assignmentId],
+    references: [assignments.id],
+  }),
+  helper: one(users, {
+    fields: [bids.helperId],
+    references: [users.id],
+  }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
+    relationName: 'sent_messages',
+  }),
+  receiver: one(users, {
+    fields: [messages.receiverId],
+    references: [users.id],
+    relationName: 'received_messages',
+  }),
+}));
+
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  assignment: one(assignments, {
+    fields: [reviews.assignmentId],
+    references: [assignments.id],
+  }),
+  student: one(users, {
+    fields: [reviews.studentId],
+    references: [users.id],
+    relationName: 'student_reviews',
+  }),
+  helper: one(users, {
+    fields: [reviews.helperId],
+    references: [users.id],
+    relationName: 'helper_reviews',
+  }),
+}));
