@@ -44,7 +44,7 @@ const categories = [
 ];
 
 const budgetRanges = [
-  { label: "Any Budget", value: "" },
+  { label: "Any Budget", value: "any" },
   { label: "Under ৳500", value: "500" },
   { label: "৳500 - ৳1000", value: "1000" },
   { label: "৳1000 - ৳2000", value: "2000" },
@@ -52,7 +52,7 @@ const budgetRanges = [
 ];
 
 const deadlineRanges = [
-  { label: "Any Deadline", value: "" },
+  { label: "Any Deadline", value: "any" },
   { label: "Within 24 hours", value: "24h" },
   { label: "1-3 days", value: "3d" },
   { label: "3-7 days", value: "7d" },
@@ -63,8 +63,8 @@ export default function BrowseAssignments() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("All Categories");
-  const [budget, setBudget] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [budget, setBudget] = useState("any");
+  const [deadline, setDeadline] = useState("any");
   const [filteredAssignments, setFilteredAssignments] = useState([]);
   
   // Fetch assignments
@@ -103,7 +103,7 @@ export default function BrowseAssignments() {
     }
     
     // Filter by budget
-    if (budget) {
+    if (budget && budget !== "any") {
       if (budget === "2000+") {
         filtered = filtered.filter(assignment => assignment.budget >= 2000);
       } else {
@@ -120,7 +120,7 @@ export default function BrowseAssignments() {
     }
     
     // Filter by deadline
-    if (deadline) {
+    if (deadline && deadline !== "any") {
       const now = new Date();
       let compareDate = new Date();
       
@@ -130,17 +130,23 @@ export default function BrowseAssignments() {
           assignment => new Date(assignment.deadline) <= compareDate
         );
       } else if (deadline === "3d") {
+        const nextDay = new Date(now);
+        nextDay.setHours(nextDay.getHours() + 24);
+        
         compareDate.setDate(compareDate.getDate() + 3);
         filtered = filtered.filter(
           assignment => 
-            new Date(assignment.deadline) > now.setHours(now.getHours() + 24) && 
+            new Date(assignment.deadline) > nextDay && 
             new Date(assignment.deadline) <= compareDate
         );
       } else if (deadline === "7d") {
+        const threeDaysLater = new Date(now);
+        threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+        
         compareDate.setDate(compareDate.getDate() + 7);
         filtered = filtered.filter(
           assignment => 
-            new Date(assignment.deadline) > now.setDate(now.getDate() + 3) && 
+            new Date(assignment.deadline) > threeDaysLater && 
             new Date(assignment.deadline) <= compareDate
         );
       } else if (deadline === "7d+") {
@@ -168,8 +174,8 @@ export default function BrowseAssignments() {
   const handleClearFilters = () => {
     setSearchQuery("");
     setCategory("All Categories");
-    setBudget("");
-    setDeadline("");
+    setBudget("any");
+    setDeadline("any");
   };
 
   return (
@@ -251,7 +257,7 @@ export default function BrowseAssignments() {
                   </Select>
                 </div>
                 
-                {(searchQuery || category !== "All Categories" || budget || deadline) && (
+                {(searchQuery || category !== "All Categories" || budget !== "any" || deadline !== "any") && (
                   <div className="flex justify-end">
                     <Button type="button" variant="outline" onClick={handleClearFilters}>
                       Clear Filters
