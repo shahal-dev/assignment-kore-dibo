@@ -119,10 +119,40 @@ export class DatabaseStorage implements IStorage {
       .values({ 
         ...insertUser, 
         rating: 0, 
-        reviewCount: 0 
+        reviewCount: 0,
+        verified: true
       })
       .returning();
     return user;
+  }
+
+  async createUnverifiedUser(userData: any) {
+    return await db.insert(unverifiedUsers).values(userData).returning();
+  }
+
+  async getUnverifiedUser(email: string) {
+    const [user] = await db.select().from(unverifiedUsers).where(eq(unverifiedUsers.email, email));
+    return user;
+  }
+
+  async createVerificationCode(data: { email: string; code: string; expiresAt: Date }) {
+    return await db.insert(verificationCodes).values(data).returning();
+  }
+
+  async getVerificationCode(email: string, code: string) {
+    const [verificationCode] = await db.select()
+      .from(verificationCodes)
+      .where(and(
+        eq(verificationCodes.email, email),
+        eq(verificationCodes.code, code)
+      ));
+    return verificationCode;
+  }
+
+  async markVerificationCodeUsed(id: number) {
+    return await db.update(verificationCodes)
+      .set({ used: true })
+      .where(eq(verificationCodes.id, id));
   }
 
   async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {

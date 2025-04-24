@@ -17,6 +17,18 @@ export const verificationCodes = pgTable("verification_codes", {
   used: boolean("used").default(false),
 });
 
+export const unverifiedUsers = pgTable("unverified_users", {
+  email: text("email").primaryKey(),
+  username: text("username").notNull(),
+  password: text("password").notNull(),
+  fullName: text("full_name").notNull(),
+  userType: text("user_type", { enum: userTypes }).notNull(),
+  bio: text("bio"),
+  skills: text("skills").array(),
+  profileImage: text("profile_image"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
