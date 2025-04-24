@@ -73,7 +73,7 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
-      
+
       // Check if unverified user exists
       const existingUser = await storage.getUserByEmail(validatedData.email);
       if (existingUser?.verified) {
@@ -98,12 +98,12 @@ export function setupAuth(app: Express) {
 
       // Send verification email
       await sendVerificationEmail(validatedData.email, code);
-      
+
       res.status(200).json({ message: "Verification code sent" });
-      
+
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
-      
+
       // Log the user in
       req.login(user, (err) => {
         if (err) return next(err);
@@ -140,20 +140,20 @@ export function setupAuth(app: Express) {
   // Update user profile
   app.patch("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+
     const allowedFields = ['fullName', 'bio', 'skills', 'profileImage'];
     const updateData: Record<string, any> = {};
-    
+
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         updateData[field] = req.body[field];
       }
     }
-    
+
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: "No valid fields to update" });
     }
-    
+
     storage.updateUser(req.user.id, updateData)
       .then(updatedUser => {
         if (!updatedUser) {
@@ -171,7 +171,7 @@ export function setupAuth(app: Express) {
   app.post("/api/verify", async (req, res) => {
     try {
       const { email, code } = req.body;
-      
+
       const verificationCode = await storage.getVerificationCode(email, code);
       if (!verificationCode || verificationCode.used || new Date() > verificationCode.expiresAt) {
         return res.status(400).json({ message: "Invalid or expired code" });
@@ -185,7 +185,7 @@ export function setupAuth(app: Express) {
       // Create verified user
       const user = await storage.createVerifiedUser(userData);
       await storage.markVerificationCodeUsed(verificationCode.id);
-      
+
       // Log user in using a promise wrapper
       await new Promise<void>((resolve, reject) => {
         req.login(user, (err) => {
@@ -200,3 +200,4 @@ export function setupAuth(app: Express) {
       res.status(500).json({ message: "Verification failed" });
     }
   });
+}
