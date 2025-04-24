@@ -8,6 +8,8 @@ import {
   insertBidSchema,
   insertMessageSchema,
   insertReviewSchema,
+  insertDoubtSchema,
+  insertAnswerSchema,
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -557,6 +559,249 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(enrichedReviews);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch reviews" });
+    }
+  });
+
+  // Doubt routes (Chegg-like quick questions)
+  app.get("/api/doubts", async (req, res) => {
+    try {
+      const { subject, status } = req.query;
+      let filters: any = {};
+      
+      if (subject) filters.subject = subject as string;
+      if (status) filters.status = status as string;
+      
+      const doubts = await storage.getDoubts(filters);
+      res.json(doubts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch doubts" });
+    }
+  });
+
+  app.get("/api/doubts/recent", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
+      const doubts = await storage.getRecentDoubts(limit);
+      
+      // Enrich doubt data with student info and answer count
+      const enrichedDoubts = await Promise.all(
+        doubts.map(async (doubt) => {
+          const student = await storage.getUser(doubt.studentId);
+          const answers = await storage.getAnswersByDoubtId(doubt.id);
+          
+          return {
+            ...doubt,
+            answerCount: answers.length,
+            student: student ? {
+              id: student.id,
+              username: student.username,
+              fullName: student.fullName,
+              profileImage: student.profileImage
+            } : null
+          };
+        })
+      );
+      
+      res.json(enrichedDoubts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch recent doubts" });
+    }
+  });
+
+  app.get("/api/doubts/:id", async (req, res) => {
+    try {
+      const doubtId = parseInt(req.params.id);
+      const doubt = await storage.getDoubt(doubtId);
+      
+      if (!doubt) {
+        return res.status(404).json({ message: "Doubt not found" });
+      }
+      
+      // Get student info
+      const student = await storage.getUser(doubt.studentId);
+      
+      // Get answers for this doubt
+      const answers = await storage.getAnswersByDoubtId(doubtId);
+      
+      // Enrich answers with helper info
+      const enrichedAnswers = await Promise.all(
+        answers.map(async (answer) => {
+          const helper = await storage.getUser(answer.helperId);
+          return {
+            ...answer,
+            helper: helper ? {
+              id: helper.id,
+              username: helper.username,
+              fullName: helper.fullName,
+              profileImage: helper.profileImage,
+              rating: helper.rating,
+              reviewCount: helper.reviewCount
+            } : null
+          };
+        })
+      );
+      
+      res.json({
+        ...doubt,
+        student: student ? {
+          id: student.id,
+          username: student.username,
+          fullName: student.fullName,
+          profileImage: student.profileImage
+        } : null,
+        answers: enrichedAnswers
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch doubt" });
+    }
+  });
+
+  app.post("/api/doubts", isStudent, async (req, res) => {
+    try {
+      const validatedData = insertDoubtSchema.parse({
+        ...req.body,
+        studentId: req.user.id
+      });
+      
+      const doubt = await storage.createDoubt(validatedData);
+      res.status(201).json(doubt);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid doubt data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create doubt" });
+    }
+  });
+
+  app.patch("/api/doubts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const doubtId = parseInt(req.params.id);
+      const doubt = await storage.getDoubt(doubtId);
+      
+      if (!doubt) {
+        return res.status(404).json({ message: "Doubt not found" });
+      }
+      
+      // Only the student who created the doubt can update it
+      if (doubt.studentId !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized to update this doubt" });
+      }
+      
+      const updatedDoubt = await storage.updateDoubt(doubtId, req.body);
+      res.json(updatedDoubt);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update doubt" });
+    }
+  });
+
+  app.get("/api/doubts/student/:id", async (req, res) => {
+    try {
+      const studentId = parseInt(req.params.id);
+      const doubts = await storage.getDoubtsByStudentId(studentId);
+      res.json(doubts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch student doubts" });
+    }
+  });
+
+  app.get("/api/doubts/helper/:id", async (req, res) => {
+    try {
+      const helperId = parseInt(req.params.id);
+      const doubts = await storage.getDoubtsByHelperId(helperId);
+      res.json(doubts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch helper doubts" });
+    }
+  });
+
+  app.get("/api/doubts/subject/:subject", async (req, res) => {
+    try {
+      const subject = req.params.subject;
+      const doubts = await storage.getDoubtsBySubject(subject);
+      res.json(doubts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch doubts by subject" });
+    }
+  });
+
+  // Answer routes
+  app.get("/api/answers/doubt/:id", async (req, res) => {
+    try {
+      const doubtId = parseInt(req.params.id);
+      const answers = await storage.getAnswersByDoubtId(doubtId);
+      
+      // Enrich answer data with helper info
+      const enrichedAnswers = await Promise.all(
+        answers.map(async (answer) => {
+          const helper = await storage.getUser(answer.helperId);
+          return {
+            ...answer,
+            helper: helper ? {
+              id: helper.id,
+              username: helper.username,
+              fullName: helper.fullName,
+              profileImage: helper.profileImage,
+              rating: helper.rating,
+              reviewCount: helper.reviewCount
+            } : null
+          };
+        })
+      );
+      
+      res.json(enrichedAnswers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch answers" });
+    }
+  });
+
+  app.post("/api/answers", isHelper, async (req, res) => {
+    try {
+      const validatedData = insertAnswerSchema.parse({
+        ...req.body,
+        helperId: req.user.id
+      });
+      
+      // Check if the doubt exists and is open
+      const doubt = await storage.getDoubt(validatedData.doubtId);
+      if (!doubt) {
+        return res.status(404).json({ message: "Doubt not found" });
+      }
+      
+      if (doubt.status !== 'open') {
+        return res.status(400).json({ message: "This doubt is not open for answers" });
+      }
+      
+      const answer = await storage.createAnswer(validatedData);
+      res.status(201).json(answer);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid answer data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create answer" });
+    }
+  });
+
+  app.patch("/api/answers/:id/accept", isAuthenticated, async (req, res) => {
+    try {
+      const answerId = parseInt(req.params.id);
+      const answer = await storage.getAnswer(answerId);
+      
+      if (!answer) {
+        return res.status(404).json({ message: "Answer not found" });
+      }
+      
+      // Get the doubt to check if the current user is the student who posted it
+      const doubt = await storage.getDoubt(answer.doubtId);
+      
+      // Only the student who posted the doubt can accept an answer
+      if (!doubt || doubt.studentId !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized to accept this answer" });
+      }
+      
+      const updatedAnswer = await storage.acceptAnswer(answerId);
+      res.json(updatedAnswer);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to accept answer" });
     }
   });
 

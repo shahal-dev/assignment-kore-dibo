@@ -4,6 +4,8 @@ import {
   bids,
   messages,
   reviews,
+  doubts,
+  answers,
   type User,
   type InsertUser,
   type Assignment,
@@ -14,6 +16,10 @@ import {
   type InsertMessage,
   type Review,
   type InsertReview,
+  type Doubt,
+  type InsertDoubt,
+  type Answer,
+  type InsertAnswer,
 } from "@shared/schema";
 import session from "express-session";
 import { db } from "./db";
@@ -62,6 +68,24 @@ export interface IStorage {
   createReview(review: InsertReview): Promise<Review>;
   getReviewsByHelperId(helperId: number): Promise<Review[]>;
   getReviewsByAssignmentId(assignmentId: number): Promise<Review[]>;
+  
+  // Doubt operations (Chegg-like feature)
+  getDoubt(id: number): Promise<Doubt | undefined>;
+  createDoubt(doubt: InsertDoubt): Promise<Doubt>;
+  updateDoubt(id: number, doubt: Partial<Doubt>): Promise<Doubt | undefined>;
+  getDoubts(filters?: Partial<Doubt>): Promise<Doubt[]>;
+  getRecentDoubts(limit: number): Promise<Doubt[]>;
+  getDoubtsByStudentId(studentId: number): Promise<Doubt[]>;
+  getDoubtsByHelperId(helperId: number): Promise<Doubt[]>;
+  getDoubtsBySubject(subject: string): Promise<Doubt[]>;
+  
+  // Answer operations
+  getAnswer(id: number): Promise<Answer | undefined>;
+  createAnswer(answer: InsertAnswer): Promise<Answer>;
+  updateAnswer(id: number, answer: Partial<Answer>): Promise<Answer | undefined>;
+  getAnswersByDoubtId(doubtId: number): Promise<Answer[]>;
+  getAnswersByHelperId(helperId: number): Promise<Answer[]>;
+  acceptAnswer(id: number): Promise<Answer | undefined>;
   
   // Session store
   sessionStore: any;
@@ -347,6 +371,154 @@ export class DatabaseStorage implements IStorage {
     return await db.select()
       .from(reviews)
       .where(eq(reviews.assignmentId, assignmentId));
+  }
+
+  // Doubt operations
+  async getDoubt(id: number): Promise<Doubt | undefined> {
+    const [doubt] = await db.select()
+      .from(doubts)
+      .where(eq(doubts.id, id));
+    return doubt;
+  }
+
+  async createDoubt(insertDoubt: InsertDoubt): Promise<Doubt> {
+    const [doubt] = await db.insert(doubts)
+      .values({
+        ...insertDoubt,
+        helperId: null,
+        status: 'open',
+      })
+      .returning();
+    return doubt;
+  }
+
+  async updateDoubt(id: number, doubtData: Partial<Doubt>): Promise<Doubt | undefined> {
+    const [doubt] = await db.update(doubts)
+      .set(doubtData)
+      .where(eq(doubts.id, id))
+      .returning();
+    return doubt;
+  }
+
+  async getDoubts(filters?: Partial<Doubt>): Promise<Doubt[]> {
+    let query = db.select().from(doubts);
+    
+    if (filters) {
+      const conditions = [];
+      
+      if (filters.status !== undefined) {
+        conditions.push(eq(doubts.status, filters.status));
+      }
+      
+      if (filters.studentId !== undefined) {
+        conditions.push(eq(doubts.studentId, filters.studentId));
+      }
+      
+      if (filters.helperId !== undefined) {
+        conditions.push(eq(doubts.helperId, filters.helperId));
+      }
+      
+      if (filters.subject !== undefined) {
+        conditions.push(eq(doubts.subject, filters.subject));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+    }
+    
+    return await query.orderBy(desc(doubts.createdAt));
+  }
+
+  async getRecentDoubts(limit: number): Promise<Doubt[]> {
+    return await db.select()
+      .from(doubts)
+      .where(eq(doubts.status, 'open'))
+      .orderBy(desc(doubts.createdAt))
+      .limit(limit);
+  }
+
+  async getDoubtsByStudentId(studentId: number): Promise<Doubt[]> {
+    return await db.select()
+      .from(doubts)
+      .where(eq(doubts.studentId, studentId))
+      .orderBy(desc(doubts.createdAt));
+  }
+
+  async getDoubtsByHelperId(helperId: number): Promise<Doubt[]> {
+    return await db.select()
+      .from(doubts)
+      .where(eq(doubts.helperId, helperId))
+      .orderBy(desc(doubts.createdAt));
+  }
+
+  async getDoubtsBySubject(subject: string): Promise<Doubt[]> {
+    return await db.select()
+      .from(doubts)
+      .where(eq(doubts.subject, subject))
+      .orderBy(desc(doubts.createdAt));
+  }
+
+  // Answer operations
+  async getAnswer(id: number): Promise<Answer | undefined> {
+    const [answer] = await db.select()
+      .from(answers)
+      .where(eq(answers.id, id));
+    return answer;
+  }
+
+  async createAnswer(insertAnswer: InsertAnswer): Promise<Answer> {
+    const [answer] = await db.insert(answers)
+      .values({
+        ...insertAnswer,
+        isAccepted: false,
+      })
+      .returning();
+    return answer;
+  }
+
+  async updateAnswer(id: number, answerData: Partial<Answer>): Promise<Answer | undefined> {
+    const [answer] = await db.update(answers)
+      .set(answerData)
+      .where(eq(answers.id, id))
+      .returning();
+    return answer;
+  }
+
+  async getAnswersByDoubtId(doubtId: number): Promise<Answer[]> {
+    return await db.select()
+      .from(answers)
+      .where(eq(answers.doubtId, doubtId))
+      .orderBy(desc(answers.createdAt));
+  }
+
+  async getAnswersByHelperId(helperId: number): Promise<Answer[]> {
+    return await db.select()
+      .from(answers)
+      .where(eq(answers.helperId, helperId))
+      .orderBy(desc(answers.createdAt));
+  }
+
+  async acceptAnswer(id: number): Promise<Answer | undefined> {
+    // First, get the answer to find its doubtId
+    const answer = await this.getAnswer(id);
+    if (!answer) return undefined;
+
+    // Update the doubt status to 'answered'
+    await db.update(doubts)
+      .set({ 
+        status: 'answered',
+        helperId: answer.helperId
+      })
+      .where(eq(doubts.id, answer.doubtId));
+
+    // Mark this answer as accepted
+    const [updatedAnswer] = await db.update(answers)
+      .set({ isAccepted: true })
+      .where(eq(answers.id, id))
+      .returning();
+    
+    return updatedAnswer;
   }
 }
 
