@@ -1,18 +1,16 @@
 
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { motion, AnimatePresence } from "framer-motion";
+import { Upload, ImagePlus, ArrowRight } from "lucide-react";
 
 export default function SubmissionBox() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const [mode, setMode] = useState("assignment");
+  const [question, setQuestion] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,46 +18,49 @@ export default function SubmissionBox() {
       navigate("/auth");
       return;
     }
-    navigate(mode === "assignment" ? "/assignments/create" : "/doubts/create");
+    navigate("/assignments/create");
   };
 
   return (
-    <Card className="w-full max-w-xl mx-auto shadow-lg">
-      <CardContent className="p-6">
-        <Tabs defaultValue="assignment" className="mb-4" onValueChange={setMode}>
-          <TabsList className="w-full">
-            <TabsTrigger value="assignment" className="w-1/2">Assignment</TabsTrigger>
-            <TabsTrigger value="doubt" className="w-1/2">Quick Doubt</TabsTrigger>
-          </TabsList>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={mode}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.2 }}
+    <Card className="w-full shadow-xl border-0 bg-white rounded-xl">
+      <CardContent className="p-0">
+        <form onSubmit={handleSubmit}>
+          <div className="relative">
+            <Textarea 
+              placeholder="What would you like help with today?"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              className="min-h-[120px] p-6 border-0 text-lg resize-none focus:ring-0 rounded-t-xl"
+            />
+            <div className="absolute right-4 top-4 flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <Upload className="h-5 w-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <ImagePlus className="h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-b-xl flex justify-end">
+            <Button 
+              type="submit"
+              className="bg-[#FF7043] hover:bg-[#F4511E] text-white gap-2"
             >
-              <TabsContent value="assignment" className="mt-4">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <Input placeholder="Assignment Title" required />
-                  <Textarea placeholder="Describe your assignment requirements..." className="min-h-[100px]" required />
-                  <Button type="submit" className="w-full">
-                    {user ? "Create Assignment" : "Sign in to Post"}
-                  </Button>
-                </form>
-              </TabsContent>
-              <TabsContent value="doubt" className="mt-4">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <Input placeholder="Quick Question Title" required />
-                  <Textarea placeholder="Ask your doubt here..." className="min-h-[100px]" required />
-                  <Button type="submit" className="w-full">
-                    {user ? "Post Question" : "Sign in to Ask"}
-                  </Button>
-                </form>
-              </TabsContent>
-            </motion.div>
-          </AnimatePresence>
-        </Tabs>
+              {user ? "Get Help" : "Sign in to Get Help"}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );
