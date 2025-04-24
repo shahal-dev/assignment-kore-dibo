@@ -96,7 +96,7 @@ export default function BrowseAssignmentsSection() {
               <p className="text-gray-500">Failed to load assignments. Please try again later.</p>
             </div>
           ) : assignments?.length > 0 ? (
-            assignments.map((assignment) => (
+            assignments.map((assignment: any) => (
               <div key={assignment.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-6">
                   <div className="flex justify-between items-start">
@@ -161,7 +161,7 @@ export default function BrowseAssignmentsSection() {
 }
 
 // Search icon component
-function Search(props) {
+function Search(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}
