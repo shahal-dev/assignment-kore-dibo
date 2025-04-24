@@ -8,6 +8,15 @@ export const doubtStatuses = ['open', 'answered', 'closed'] as const;
 
 export const userTypes = ['student', 'helper'] as const;
 
+export const verificationCodes = pgTable("verification_codes", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  code: text("code").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+});
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -15,6 +24,7 @@ export const users = pgTable("users", {
   fullName: text("full_name").notNull(),
   email: text("email").notNull().unique(),
   userType: text("user_type", { enum: userTypes }).notNull(),
+  verified: boolean("verified").default(false),
   bio: text("bio"),
   skills: text("skills").array(),
   profileImage: text("profile_image"),

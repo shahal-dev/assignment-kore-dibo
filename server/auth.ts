@@ -72,26 +72,34 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      // Validate user data
       const validatedData = insertUserSchema.parse(req.body);
       
-      // Check if username already exists
-      const existingUserByUsername = await storage.getUserByUsername(validatedData.username);
-      if (existingUserByUsername) {
-        return res.status(400).json({ message: "Username already exists" });
+      // Check if unverified user exists
+      const existingUser = await storage.getUserByEmail(validatedData.email);
+      if (existingUser?.verified) {
+        return res.status(400).json({ message: "Email already registered" });
       }
-      
-      // Check if email already exists
-      const existingUserByEmail = await storage.getUserByEmail(validatedData.email);
-      if (existingUserByEmail) {
-        return res.status(400).json({ message: "Email already exists" });
-      }
-      
-      // Hash password and create user
-      const user = await storage.createUser({
+
+      // Generate verification code
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+      await storage.createVerificationCode({
+        email: validatedData.email,
+        code,
+        expiresAt
+      });
+
+      // Store user data temporarily
+      await storage.createUnverifiedUser({
         ...validatedData,
         password: await hashPassword(validatedData.password),
       });
+
+      // Send verification email
+      await sendVerificationEmail(validatedData.email, code);
+      
+      res.status(200).json({ message: "Verification code sent" });
       
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
@@ -160,3 +168,31 @@ export function setupAuth(app: Express) {
       });
   });
 }
+app.post("/api/verify", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const verificationCode = await storage.getVerificationCode(email, code);
+    if (!verificationCode || verificationCode.used || new Date() > verificationCode.expiresAt) {
+      return res.status(400).json({ message: "Invalid or expired code" });
+    }
+
+    const userData = await storage.getUnverifiedUser(email);
+    if (!userData) {
+      return res.status(400).json({ message: "No registration found" });
+    }
+
+    // Create verified user
+    const user = await storage.createVerifiedUser(userData);
+    await storage.markVerificationCodeUsed(verificationCode.id);
+    
+    // Log user in
+    req.login(user, (err) => {
+      if (err) return next(err);
+      const { password, ...userWithoutPassword } = user;
+      res.status(200).json(userWithoutPassword);
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Verification failed" });
+  }
+});
