@@ -18,49 +18,35 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link href="/">
-              <a className="flex-shrink-0 flex items-center">
-                <span className="text-primary-600 font-bold text-xl">Assignment Kore Dibo</span>
-              </a>
+            <Link href="/" className="flex-shrink-0 flex items-center">
+              <span className="text-primary-600 font-bold text-xl">Assignment Kore Dibo</span>
             </Link>
           </div>
           
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link href="/#how-it-works">
-              <a className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
-                How It Works
-              </a>
+            <Link href="/#how-it-works" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
+              How It Works
             </Link>
-            <Link href="/assignments">
-              <a className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
-                Browse Assignments
-              </a>
+            <Link href="/assignments" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
+              Browse Assignments
             </Link>
-            <Link href="/#become-helper">
-              <a className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
-                Become a Helper
-              </a>
+            <Link href="/#become-helper" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
+              Become a Helper
             </Link>
             
             {!user ? (
               <>
-                <Link href="/auth">
-                  <a className="px-3 py-2 rounded-md text-sm font-medium text-primary-600 hover:text-primary-700">
-                    Sign In
-                  </a>
+                <Link href="/auth" className="px-3 py-2 rounded-md text-sm font-medium text-primary-600 hover:text-primary-700">
+                  Sign In
                 </Link>
-                <Link href="/auth?tab=register">
-                  <a className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
-                    Sign Up
-                  </a>
+                <Link href="/auth?tab=register" className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+                  Sign Up
                 </Link>
               </>
             ) : (
-              <Link href={`/dashboard/${user.userType}`}>
-                <a className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
-                  Dashboard
-                </a>
+              <Link href={`/dashboard/${user.userType}`} className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+                Dashboard
               </Link>
             )}
           </div>
@@ -86,40 +72,28 @@ export default function Navbar() {
       {isMobileMenuOpen && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link href="/#how-it-works">
-              <a className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
-                How It Works
-              </a>
+            <Link href="/#how-it-works" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
+              How It Works
             </Link>
-            <Link href="/assignments">
-              <a className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
-                Browse Assignments
-              </a>
+            <Link href="/assignments" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
+              Browse Assignments
             </Link>
-            <Link href="/#become-helper">
-              <a className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
-                Become a Helper
-              </a>
+            <Link href="/#become-helper" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50">
+              Become a Helper
             </Link>
             
             {!user ? (
               <>
-                <Link href="/auth">
-                  <a className="block px-3 py-2 rounded-md text-base font-medium text-primary-600 hover:text-primary-700">
-                    Sign In
-                  </a>
+                <Link href="/auth" className="block px-3 py-2 rounded-md text-base font-medium text-primary-600 hover:text-primary-700">
+                  Sign In
                 </Link>
-                <Link href="/auth?tab=register">
-                  <a className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-primary-600 hover:bg-primary-700 py-3 mt-2">
-                    Sign Up
-                  </a>
+                <Link href="/auth?tab=register" className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-primary-600 hover:bg-primary-700 py-3 mt-2">
+                  Sign Up
                 </Link>
               </>
             ) : (
-              <Link href={`/dashboard/${user.userType}`}>
-                <a className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-primary-600 hover:bg-primary-700 py-3 mt-2">
-                  Dashboard
-                </a>
+              <Link href={`/dashboard/${user.userType}`} className="block px-3 py-2 rounded-md text-base font-medium w-full text-center text-white bg-primary-600 hover:bg-primary-700 py-3 mt-2">
+                Dashboard
               </Link>
             )}
           </div>

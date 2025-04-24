@@ -16,15 +16,11 @@ export default function HeroSection() {
               Connect with skilled assignment helpers in Bangladesh and get your academic work completed on time.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <Link href={user ? `/dashboard/${user.userType}` : "/auth"}>
-                <a className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-primary-600 bg-white hover:bg-gray-50">
-                  Post an Assignment
-                </a>
+              <Link href={user ? `/dashboard/${user.userType}` : "/auth"} className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-primary-600 bg-white hover:bg-gray-50">
+                Post an Assignment
               </Link>
-              <Link href={user ? `/dashboard/${user.userType}` : "/auth?type=helper"}>
-                <a className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-secondary-600 hover:bg-secondary-700">
-                  Become a Helper
-                </a>
+              <Link href={user ? `/dashboard/${user.userType}` : "/auth?type=helper"} className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-secondary-600 hover:bg-secondary-700">
+                Become a Helper
               </Link>
             </div>
           </div>
