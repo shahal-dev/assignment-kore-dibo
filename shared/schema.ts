@@ -3,6 +3,9 @@ import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { z } from "zod";
 
+// Define constants for reuse across the schema
+export const doubtStatuses = ['open', 'answered', 'closed'] as const;
+
 export const userTypes = ['student', 'helper'] as const;
 
 export const users = pgTable("users", {
@@ -60,6 +63,32 @@ export const reviews = pgTable("reviews", {
   rating: integer("rating").notNull(),
   comment: text("comment"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Doubts table for quick questions/answers (like Chegg)
+export const doubts = pgTable("doubts", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  question: text("question").notNull(),
+  subject: text("subject").notNull(),
+  subTopic: text("sub_topic"), // Optional sub-topic within the subject
+  image: text("image"), // Optional image URL for doubt visualization
+  budget: integer("budget").default(100), // Default lower price than assignments
+  studentId: integer("student_id").notNull(),
+  helperId: integer("helper_id"), // Initially null until a helper answers
+  createdAt: timestamp("created_at").defaultNow(),
+  status: text("status", { enum: doubtStatuses }).default("open"),
+});
+
+// Answers table for doubt solutions
+export const answers = pgTable("answers", {
+  id: serial("id").primaryKey(),
+  doubtId: integer("doubt_id").notNull(),
+  helperId: integer("helper_id").notNull(),
+  answer: text("answer").notNull(),
+  image: text("image"), // Optional image URL for solution visualization
+  createdAt: timestamp("created_at").defaultNow(),
+  isAccepted: boolean("is_accepted").default(false),
 });
 
 // Insert Schemas
@@ -132,6 +161,38 @@ export const insertReviewSchema = createInsertSchema(reviews)
     comment: z.string().optional(),
   });
 
+// Schema for doubts
+export const insertDoubtSchema = createInsertSchema(doubts)
+  .pick({
+    title: true,
+    question: true,
+    subject: true,
+    subTopic: true,
+    image: true,
+    budget: true,
+    studentId: true,
+  })
+  .extend({
+    title: z.string().min(3, "Title must be at least 3 characters"),
+    question: z.string().min(10, "Question must be at least 10 characters"),
+    subTopic: z.string().optional(),
+    image: z.string().optional(),
+    budget: z.number().default(100),
+  });
+
+// Schema for answers
+export const insertAnswerSchema = createInsertSchema(answers)
+  .pick({
+    doubtId: true,
+    helperId: true,
+    answer: true,
+    image: true,
+  })
+  .extend({
+    answer: z.string().min(10, "Answer must be at least 10 characters"),
+    image: z.string().optional(),
+  });
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -148,6 +209,12 @@ export type Message = typeof messages.$inferSelect;
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type Review = typeof reviews.$inferSelect;
 
+export type InsertDoubt = z.infer<typeof insertDoubtSchema>;
+export type Doubt = typeof doubts.$inferSelect;
+
+export type InsertAnswer = z.infer<typeof insertAnswerSchema>;
+export type Answer = typeof answers.$inferSelect;
+
 // Relationships
 export const usersRelations = relations(users, ({ many }) => ({
   assignmentsAsStudent: many(assignments, { relationName: 'student_assignments' }),
@@ -157,6 +224,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   givenReviews: many(reviews, { relationName: 'student_reviews' }),
   sentMessages: many(messages, { relationName: 'sent_messages' }),
   receivedMessages: many(messages, { relationName: 'received_messages' }),
+  doubtsAsStudent: many(doubts),
+  answersAsHelper: many(answers),
 }));
 
 export const assignmentsRelations = relations(assignments, ({ one, many }) => ({
@@ -212,5 +281,30 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
     fields: [reviews.helperId],
     references: [users.id],
     relationName: 'helper_reviews',
+  }),
+}));
+
+// Doubts relationships
+export const doubtsRelations = relations(doubts, ({ one, many }) => ({
+  student: one(users, {
+    fields: [doubts.studentId],
+    references: [users.id],
+  }),
+  helper: one(users, {
+    fields: [doubts.helperId],
+    references: [users.id],
+  }),
+  answers: many(answers),
+}));
+
+// Answers relationships
+export const answersRelations = relations(answers, ({ one }) => ({
+  doubt: one(doubts, {
+    fields: [answers.doubtId],
+    references: [doubts.id],
+  }),
+  helper: one(users, {
+    fields: [answers.helperId],
+    references: [users.id],
   }),
 }));
