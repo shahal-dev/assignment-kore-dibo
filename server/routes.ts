@@ -1,37 +1,48 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import type { Message, Conversation } from "@shared/schema";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { z } from "zod";
 import {
   insertAssignmentSchema,
   insertBidSchema,
-  insertMessageSchema,
   insertReviewSchema,
   insertDoubtSchema,
   insertAnswerSchema,
+  sendMessageSchema,
+  // insertMessageSchema, // not needed in routes
 } from "@shared/schema";
+import express from "express";
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+console.log("!!! ROUTES FILE LOADED AT", new Date().toISOString());
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication
   setupAuth(app);
-  
-  // Helper middleware to check if user is authenticated
-  const isAuthenticated = (req, res, next) => {
-    if (req.isAuthenticated()) return next();
+
+// Helper middleware to check if user is authenticated
+  const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated() && req.user) return next();
     return res.status(401).json({ message: "Unauthorized" });
   };
 
   // Helper middleware to check if user is a student
-  const isStudent = (req, res, next) => {
-    if (req.isAuthenticated() && req.user.userType === 'student') return next();
+  const isStudent = (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated() && req.user && (req.user as any).userType === 'student') return next();
     return res.status(403).json({ message: "Only students can perform this action" });
   };
 
   // Helper middleware to check if user is a helper
-  const isHelper = (req, res, next) => {
-    if (req.isAuthenticated() && req.user.userType === 'helper') return next();
+  const isHelper = (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated() && req.user && (req.user as any).userType === 'helper') return next();
     return res.status(403).json({ message: "Only helpers can perform this action" });
+  
   };
 
   // Assignment routes
@@ -129,17 +140,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assignments", isStudent, async (req, res) => {
+  app.post("/api/assignments", isStudent, multer({ dest: path.join(__dirname, '../uploads/assignments'), limits: { fileSize: 5 * 1024 * 1024 } }).array('photos', 5), async (req, res) => {
+    console.debug("[Assignment Request] body:", req.body, "files:", req.files);
     try {
+      // collect photo URLs
+      const files = (req.files as Express.Multer.File[]) || [];
+      const photoUrls = files.map(f => `/uploads/assignments/${f.filename}`);
+      // validate and include photos
+      const user = req.user!;
+      // Coerce numeric and string fields from form-data
+      const { title, description, budget, deadline, category } = req.body;
       const validatedData = insertAssignmentSchema.parse({
-        ...req.body,
-        studentId: req.user.id
+        title,
+        description,
+        budget: Number(budget),
+        deadline,
+        category,
+        studentId: user.id,
+        photos: photoUrls,
       });
-      
       const assignment = await storage.createAssignment(validatedData);
       res.status(201).json(assignment);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("[Assignment Validation Error]", error.errors);
         return res.status(400).json({ message: "Invalid assignment data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create assignment" });
@@ -148,6 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/assignments/:id", isAuthenticated, async (req, res) => {
     try {
+      const user = req.user!;
       const assignmentId = parseInt(req.params.id);
       const assignment = await storage.getAssignment(assignmentId);
       
@@ -156,7 +181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Only the student who created the assignment can update it
-      if (assignment.studentId !== req.user.id && req.user.userType !== 'helper') {
+      if (assignment.studentId !== user.id && user.userType !== 'helper') {
         return res.status(403).json({ message: "Unauthorized to update this assignment" });
       }
       
@@ -231,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const helperId = parseInt(req.params.id);
       
       // Only the helper can view their own bids
-      if (helperId !== req.user.id && req.user.userType !== 'helper') {
+      if (helperId !== req.user!.id && req.user!.userType !== 'helper') {
         return res.status(403).json({ message: "Unauthorized to view these bids" });
       }
       
@@ -258,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertBidSchema.parse({
         ...req.body,
-        helperId: req.user.id
+        helperId: req.user!.id
       });
       
       // Check if the assignment exists and is open
@@ -272,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if the helper has already placed a bid on this assignment
-      const existingBids = await storage.getBidsByHelperId(req.user.id);
+      const existingBids = await storage.getBidsByHelperId(req.user!.id);
       const alreadyBid = existingBids.some(bid => bid.assignmentId === validatedData.assignmentId);
       
       if (alreadyBid) {
@@ -302,12 +327,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assignment = await storage.getAssignment(bid.assignmentId);
       
       // Only the student who posted the assignment or the helper who placed the bid can update it
-      if (assignment?.studentId !== req.user.id && bid.helperId !== req.user.id) {
+      if (assignment?.studentId !== req.user!.id && bid.helperId !== req.user!.id) {
         return res.status(403).json({ message: "Unauthorized to update this bid" });
       }
       
       // If the student is accepting a bid
-      if (req.body.status === 'accepted' && assignment?.studentId === req.user.id) {
+      if (req.body.status === 'accepted' && assignment?.studentId === req.user!.id) {
         // Update the assignment to mark it as assigned to this helper
         await storage.updateAssignment(bid.assignmentId, {
           isOpen: false,
@@ -363,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get reviews for this helper
       const reviews = await storage.getReviewsByHelperId(helperId);
       
-      // Enrich reviews with student info
+      // Enrich reviews with student and assignment info
       const enrichedReviews = await Promise.all(
         reviews.map(async (review) => {
           const student = await storage.getUser(review.studentId);
@@ -395,15 +420,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Message routes
-  app.get("/api/messages", isAuthenticated, async (req, res) => {
+  app.get("/api/messages", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const messages = await storage.getMessagesByUserId(req.user.id);
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const userId = req.user!.id;
+      const messages = await storage.getMessagesByUserId(userId);
       
       // Group messages by conversation
       const conversationMap = new Map();
       
       for (const message of messages) {
-        const otherUserId = message.senderId === req.user.id ? message.receiverId : message.senderId;
+        const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
         
         if (!conversationMap.has(otherUserId)) {
           const otherUser = await storage.getUser(otherUserId);
@@ -416,14 +445,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               userType: otherUser.userType
             } : null,
             lastMessage: message,
-            unreadCount: message.receiverId === req.user.id && !message.isRead ? 1 : 0
+            unreadCount: message.receiverId === userId && !message.isRead ? 1 : 0
           });
         } else {
           const conversation = conversationMap.get(otherUserId);
           if (new Date(message.createdAt) > new Date(conversation.lastMessage.createdAt)) {
             conversation.lastMessage = message;
           }
-          if (message.receiverId === req.user.id && !message.isRead) {
+          if (message.receiverId === userId && !message.isRead) {
             conversation.unreadCount += 1;
           }
         }
@@ -439,12 +468,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/messages/:userId", isAuthenticated, async (req, res) => {
     try {
       const otherUserId = parseInt(req.params.userId);
-      const conversation = await storage.getConversation(req.user.id, otherUserId);
+      const conversation = await storage.getConversation(req.user!.id, otherUserId);
       
       // Mark all received messages as read
       await Promise.all(
         conversation
-          .filter(msg => msg.receiverId === req.user.id && !msg.isRead)
+          .filter(msg => msg.receiverId === req.user!.id && !msg.isRead)
           .map(msg => storage.markMessageAsRead(msg.id))
       );
       
@@ -466,26 +495,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/messages", isAuthenticated, async (req, res) => {
+  app.post("/api/messages", isAuthenticated, async (req: Request, res: Response) => {
+    console.log("INSIDE /api/messages POST handler");
     try {
-      const validatedData = insertMessageSchema.parse({
-        ...req.body,
-        senderId: req.user.id
-      });
-      
-      // Check if receiver exists
-      const receiver = await storage.getUser(validatedData.receiverId);
-      if (!receiver) {
-        return res.status(404).json({ message: "Receiver not found" });
+      if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
       }
-      
-      const message = await storage.createMessage(validatedData);
-      res.status(201).json(message);
+      const senderId = req.user!.id;
+      const { receiverId, content } = sendMessageSchema.parse(req.body);
+      console.log(`[DEBUG] senderId: ${senderId}, receiverId: ${receiverId}, content: ${content}`);
+      const message = await storage.createMessage({
+        senderId,
+        receiverId,
+        content,
+        isRead: false,
+      });
+      console.log('[DEBUG] message inserted:', message);
+      return res.status(201).json({ message });
     } catch (error) {
+      console.error('[ERROR] Failed to send message:', error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid message data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to send message" });
+      if (error instanceof Error && (error as Error).stack) {
+        return res.status(500).json({ message: "Failed to send message", error: (error as Error).stack });
+      }
+      res.status(500).json({ message: "Failed to send message", error });
     }
   });
 
@@ -494,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertReviewSchema.parse({
         ...req.body,
-        studentId: req.user.id
+        studentId: req.user!.id
       });
       
       // Check if the assignment exists and belongs to this student
@@ -503,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Assignment not found" });
       }
       
-      if (assignment.studentId !== req.user.id) {
+      if (assignment.studentId !== req.user!.id) {
         return res.status(403).json({ message: "You can only review assignments that you posted" });
       }
       
@@ -656,18 +691,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/doubts", isStudent, async (req, res) => {
+  app.post("/api/doubts", isStudent, multer({ dest: path.join(__dirname, '../uploads/doubts'), limits: { fileSize: 5 * 1024 * 1024 } }).array('photos', 5), async (req: Request, res: Response) => {
+    console.debug("[Doubt Request] body:", req.body, "files:", req.files);
     try {
+      const files = (req.files as Express.Multer.File[]) || [];
+      const first = files[0];
+      const imageUrl = first ? `/uploads/doubts/${first.filename}` : undefined;
+      const user = req.user!;
+      const { question } = req.body;
+      // Use question as title and default subject
       const validatedData = insertDoubtSchema.parse({
-        ...req.body,
-        studentId: req.user.id
+        title: question,
+        question,
+        subject: 'General',
+        image: imageUrl,
+        studentId: user.id,
       });
-      
       const doubt = await storage.createDoubt(validatedData);
       res.status(201).json(doubt);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid doubt data", errors: error.errors });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        console.error("[Doubt Validation Error]", err.errors);
+        return res.status(400).json({ message: "Invalid doubt data", errors: err.errors });
       }
       res.status(500).json({ message: "Failed to create doubt" });
     }
@@ -683,7 +728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Only the student who created the doubt can update it
-      if (doubt.studentId !== req.user.id) {
+      if (doubt.studentId !== req.user!.id) {
         return res.status(403).json({ message: "Unauthorized to update this doubt" });
       }
       
@@ -758,7 +803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertAnswerSchema.parse({
         ...req.body,
-        helperId: req.user.id
+        helperId: req.user!.id
       });
       
       // Check if the doubt exists and is open
@@ -794,7 +839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const doubt = await storage.getDoubt(answer.doubtId);
       
       // Only the student who posted the doubt can accept an answer
-      if (!doubt || doubt.studentId !== req.user.id) {
+      if (!doubt || doubt.studentId !== req.user!.id) {
         return res.status(403).json({ message: "Unauthorized to accept this answer" });
       }
       
@@ -804,6 +849,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to accept answer" });
     }
   });
+
+  const uploadDir = path.join(__dirname, '../uploads');
+  console.log('[DEBUG] Resolved uploadDir:', uploadDir);
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+  const upload = multer({ dest: uploadDir, limits: { fileSize: 2 * 1024 * 1024 } });
+
+  // Serve uploaded files
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+  // Profile photo upload endpoint with error handling
+  app.post('/api/user/photo', (req: any, res: any, next) => {
+    upload.single('profileImage')(req, res, (err: any) => {
+      if (err) {
+        console.error('[DEBUG] Multer error:', err);
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'File size exceeds 2MB limit' });
+        }
+        return res.status(500).json({ message: 'Upload failed', error: err.message });
+      }
+      next();
+    });
+  }, (req: any, res: any) => {
+    console.log('[DEBUG] Uploaded file:', req.file);
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    storage.updateUser((req.user as any).id, { profileImage: fileUrl })
+      .then(updatedUser => {
+        const { password, ...userWithoutPassword } = updatedUser!;
+        res.json(userWithoutPassword);
+      })
+      .catch(error => {
+        console.error('[DEBUG] Photo upload error:', error);
+        res.status(500).json({ message: 'Failed to upload photo' });
+      });
+  });
+
+  const assignmentDir = path.join(__dirname, '../uploads/assignments');
+  if (!fs.existsSync(assignmentDir)) fs.mkdirSync(assignmentDir, { recursive: true });
+  const assignmentUpload = multer({ dest: assignmentDir, limits: { fileSize: 5 * 1024 * 1024 } });
+
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+  const doubtDir = path.join(__dirname, '../uploads/doubts');
+  if (!fs.existsSync(doubtDir)) fs.mkdirSync(doubtDir, { recursive: true });
+  const doubtUpload = multer({ dest: doubtDir, limits: { fileSize: 5 * 1024 * 1024 } });
+
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   const httpServer = createServer(app);
   return httpServer;

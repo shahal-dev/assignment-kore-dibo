@@ -44,6 +44,26 @@ export const users = pgTable("users", {
   reviewCount: integer("review_count").default(0),
 });
 
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    fullName: true,
+    email: true,
+    userType: true,
+    bio: true,
+    skills: true,
+    profileImage: true,
+  })
+  .extend({
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    email: z.string().email("Invalid email format"),
+    userType: z.enum(userTypes),
+    bio: z.string().optional(),
+    skills: z.array(z.string()).optional(),
+    profileImage: z.string().optional(),
+  });
+
 export const assignments = pgTable("assignments", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -56,6 +76,7 @@ export const assignments = pgTable("assignments", {
   helperId: integer("helper_id"),
   createdAt: timestamp("created_at").defaultNow(),
   status: text("status").default("open"),
+  photos: text("photos").array(), // Optional array of image URLs
 });
 
 export const bids = pgTable("bids", {
@@ -94,7 +115,8 @@ export const doubts = pgTable("doubts", {
   question: text("question").notNull(),
   subject: text("subject").notNull(),
   subTopic: text("sub_topic"), // Optional sub-topic within the subject
-  image: text("image"), // Optional image URL for doubt visualization
+  // Optional image URL for doubt visualization
+  image: text("image"),
   budget: integer("budget").default(100), // Default lower price than assignments
   studentId: integer("student_id").notNull(),
   helperId: integer("helper_id"), // Initially null until a helper answers
@@ -114,26 +136,6 @@ export const answers = pgTable("answers", {
 });
 
 // Insert Schemas
-export const insertUserSchema = createInsertSchema(users)
-  .pick({
-    username: true,
-    password: true,
-    fullName: true,
-    email: true,
-    userType: true,
-    bio: true,
-    skills: true,
-    profileImage: true,
-  })
-  .extend({
-    password: z.string().min(6, "Password must be at least 6 characters"),
-    email: z.string().email("Invalid email format"),
-    userType: z.enum(userTypes),
-    bio: z.string().optional(),
-    skills: z.array(z.string()).optional(),
-    profileImage: z.string().optional(),
-  });
-
 export const insertAssignmentSchema = createInsertSchema(assignments)
   .pick({
     title: true,
@@ -142,11 +144,13 @@ export const insertAssignmentSchema = createInsertSchema(assignments)
     deadline: true,
     category: true,
     studentId: true,
+    photos: true,
   })
   .extend({
     title: z.string().min(3, "Title must be at least 3 characters"),
     description: z.string().min(10, "Description must be at least 10 characters"),
     deadline: z.string().or(z.date()),
+    photos: z.array(z.string()).optional(), // URLs of uploaded photos
   });
 
 export const insertBidSchema = createInsertSchema(bids)
@@ -160,15 +164,33 @@ export const insertBidSchema = createInsertSchema(bids)
     description: z.string().min(10, "Description must be at least 10 characters"),
   });
 
-export const insertMessageSchema = createInsertSchema(messages)
-  .pick({
-    senderId: true,
-    receiverId: true,
-    content: true,
-  })
-  .extend({
-    content: z.string().min(1, "Message cannot be empty"),
-  });
+export const insertMessageSchema = z.object({
+  senderId: z.number(),
+  receiverId: z.number(),
+  content: z.string().min(1, "Message cannot be empty"),
+  isRead: z.boolean(),
+});
+
+export const messageSchema = z.object({
+  id: z.number(),
+  senderId: z.number(),
+  receiverId: z.number(),
+  content: z.string(),
+  createdAt: z.string(),
+  isRead: z.boolean(),
+});
+
+export const conversationSchema = z.object({
+  id: z.number(),
+  user1Id: z.number(),
+  user2Id: z.number(),
+  createdAt: z.string(),
+});
+
+export type Message = z.infer<typeof messageSchema>;
+export type Conversation = z.infer<typeof conversationSchema>;
+
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 export const insertReviewSchema = createInsertSchema(reviews)
   .pick({
@@ -215,6 +237,13 @@ export const insertAnswerSchema = createInsertSchema(answers)
     image: z.string().optional(),
   });
 
+// Schema for client send-message request
+export const sendMessageSchema = z.object({
+  receiverId: z.number(),
+  content: z.string().min(1, "Message cannot be empty"),
+});
+export type SendMessage = z.infer<typeof sendMessageSchema>;
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -224,9 +253,6 @@ export type Assignment = typeof assignments.$inferSelect;
 
 export type InsertBid = z.infer<typeof insertBidSchema>;
 export type Bid = typeof bids.$inferSelect;
-
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
-export type Message = typeof messages.$inferSelect;
 
 export type InsertReview = z.infer<typeof insertReviewSchema>;
 export type Review = typeof reviews.$inferSelect;

@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
+import VerifyPage from "@/pages/verify-page";
 import { ProtectedRoute } from "@/lib/protected-route";
 import StudentDashboard from "@/pages/dashboard/student-dashboard";
 import HelperDashboard from "@/pages/dashboard/helper-dashboard";
@@ -25,6 +26,7 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/verify" component={VerifyPage} />
       
       <ProtectedRoute path="/dashboard/student" component={StudentDashboard} />
       <ProtectedRoute path="/dashboard/helper" component={HelperDashboard} />

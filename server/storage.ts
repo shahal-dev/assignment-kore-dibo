@@ -6,6 +6,8 @@ import {
   reviews,
   doubts,
   answers,
+  verificationCodes,
+  unverifiedUsers,
   type User,
   type InsertUser,
   type Assignment,
@@ -30,6 +32,13 @@ import { pool } from "./db";
 const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
+  // Verification operations
+  createVerificationCode(data: { email: string; code: string; expiresAt: Date }): Promise<any>;
+  getVerificationCode(email: string, code: string): Promise<any>;
+  markVerificationCodeUsed(id: number): Promise<any>;
+  createUnverifiedUser(userData: InsertUser): Promise<typeof unverifiedUsers.$inferSelect>;
+  getUnverifiedUser(email: string): Promise<typeof unverifiedUsers.$inferSelect | undefined>;
+
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -95,7 +104,52 @@ export class DatabaseStorage implements IStorage {
   sessionStore: any;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ pool, createTableIfMissing: true });
+    this.sessionStore = new PostgresSessionStore({ 
+      pool: pool as any,
+      createTableIfMissing: true 
+    });
+  }
+
+  async createUnverifiedUser(userData: InsertUser): Promise<typeof unverifiedUsers.$inferSelect> {
+    await db.delete(unverifiedUsers)
+      .where(eq(unverifiedUsers.email, userData.email));
+    const [user] = await db.insert(unverifiedUsers)
+      .values(userData)
+      .returning();
+    return user;
+  }
+
+  async getUnverifiedUser(email: string): Promise<typeof unverifiedUsers.$inferSelect | undefined> {
+    const [user] = await db.select()
+      .from(unverifiedUsers)
+      .where(eq(unverifiedUsers.email, email));
+    return user;
+  }
+
+  // Verification operations
+  async createVerificationCode(data: { email: string; code: string; expiresAt: Date }): Promise<any> {
+    const [code] = await db.insert(verificationCodes)
+      .values(data)
+      .returning();
+    return code;
+  }
+
+  async getVerificationCode(email: string, code: string): Promise<any> {
+    const [verificationCode] = await db.select()
+      .from(verificationCodes)
+      .where(and(
+        eq(verificationCodes.email, email),
+        eq(verificationCodes.code, code)
+      ));
+    return verificationCode;
+  }
+
+  async markVerificationCodeUsed(id: number): Promise<any> {
+    const [code] = await db.update(verificationCodes)
+      .set({ used: true })
+      .where(eq(verificationCodes.id, id))
+      .returning();
+    return code;
   }
 
   // User operations
@@ -115,44 +169,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users)
-      .values({ 
-        ...insertUser, 
-        rating: 0, 
-        reviewCount: 0,
-        isVerified: true
-      })
-      .returning();
-    return user;
-  }
+    // Start a transaction
+    return await db.transaction(async (tx) => {
+      // Delete any existing unverified user with this email
+      await tx.delete(unverifiedUsers)
+        .where(eq(unverifiedUsers.email, insertUser.email));
 
-  async createUnverifiedUser(userData: any) {
-    return await db.insert(unverifiedUsers).values(userData).returning();
-  }
+      // Create the verified user
+      const [user] = await tx.insert(users)
+        .values({
+          ...insertUser,
+          isVerified: true,
+          rating: 0,
+          reviewCount: 0,
+        })
+        .returning();
 
-  async getUnverifiedUser(email: string) {
-    const [user] = await db.select().from(unverifiedUsers).where(eq(unverifiedUsers.email, email));
-    return user;
-  }
-
-  async createVerificationCode(data: { email: string; code: string; expiresAt: Date }) {
-    return await db.insert(verificationCodes).values(data).returning();
-  }
-
-  async getVerificationCode(email: string, code: string) {
-    const [verificationCode] = await db.select()
-      .from(verificationCodes)
-      .where(and(
-        eq(verificationCodes.email, email),
-        eq(verificationCodes.code, code)
-      ));
-    return verificationCode;
-  }
-
-  async markVerificationCodeUsed(id: number) {
-    return await db.update(verificationCodes)
-      .set({ used: true })
-      .where(eq(verificationCodes.id, id));
+      return user;
+    });
   }
 
   async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {
@@ -185,24 +219,54 @@ export class DatabaseStorage implements IStorage {
     return assignment;
   }
 
-  async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
-    const [assignment] = await db.insert(assignments)
+  async createAssignment(assignment: InsertAssignment): Promise<Assignment> {
+    const [newAssignment] = await db.insert(assignments)
       .values({
-        ...insertAssignment,
+        description: assignment.description,
+        title: assignment.title,
+        budget: assignment.budget,
+        deadline: new Date(assignment.deadline),
+        category: assignment.category,
+        studentId: assignment.studentId,
         isOpen: true,
         helperId: null,
-        status: 'open',
+        status: "open",
+        photos: assignment.photos ?? [],
       })
       .returning();
-    return assignment;
+      
+    if (!newAssignment) {
+      throw new Error('Failed to create assignment');
+    }
+    
+    return newAssignment;
   }
 
-  async updateAssignment(id: number, assignmentData: Partial<Assignment>): Promise<Assignment | undefined> {
-    const [assignment] = await db.update(assignments)
-      .set(assignmentData)
+  async updateAssignment(id: number, data: Partial<Assignment>): Promise<Assignment> {
+    const updateData: Partial<Assignment> = {};
+    
+    if (data.isOpen !== undefined && data.isOpen !== null) {
+      updateData.isOpen = data.isOpen;
+    }
+    
+    if (data.helperId !== undefined && data.helperId !== null) {
+      updateData.helperId = data.helperId;
+    }
+    
+    if (data.status !== undefined && data.status !== null) {
+      updateData.status = data.status;
+    }
+
+    const [updatedAssignment] = await db.update(assignments)
+      .set(updateData)
       .where(eq(assignments.id, id))
       .returning();
-    return assignment;
+      
+    if (!updatedAssignment) {
+      throw new Error(`Assignment with id ${id} not found`);
+    }
+    
+    return updatedAssignment;
   }
 
   async getAssignments(filters?: Partial<Assignment>): Promise<Assignment[]> {
@@ -211,23 +275,23 @@ export class DatabaseStorage implements IStorage {
     if (filters) {
       const conditions = [];
       
-      if (filters.isOpen !== undefined) {
-        conditions.push(eq(assignments.isOpen, filters.isOpen));
-      }
-      
-      if (filters.studentId !== undefined) {
-        conditions.push(eq(assignments.studentId, filters.studentId));
-      }
-      
-      if (filters.helperId !== undefined) {
-        conditions.push(eq(assignments.helperId, filters.helperId));
-      }
-      
-      if (filters.status !== undefined) {
+      if (filters.status !== undefined && filters.status !== null) {
         conditions.push(eq(assignments.status, filters.status));
       }
       
-      if (filters.category !== undefined) {
+      if (filters.studentId !== undefined && filters.studentId !== null) {
+        conditions.push(eq(assignments.studentId, filters.studentId));
+      }
+      
+      if (filters.helperId !== undefined && filters.helperId !== null) {
+        conditions.push(eq(assignments.helperId, filters.helperId));
+      }
+      
+      if (filters.isOpen !== undefined && filters.isOpen !== null) {
+        conditions.push(eq(assignments.isOpen, filters.isOpen));
+      }
+      
+      if (filters.category !== undefined && filters.category !== null) {
         conditions.push(eq(assignments.category, filters.category));
       }
       
@@ -313,21 +377,36 @@ export class DatabaseStorage implements IStorage {
     const [message] = await db.select()
       .from(messages)
       .where(eq(messages.id, id));
-    return message;
+    if (!message) return undefined;
+    return {
+      id: message.id,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      content: message.content,
+      createdAt: message.createdAt ? message.createdAt.toISOString() : '',
+      isRead: Boolean(message.isRead),
+    };
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const [message] = await db.insert(messages)
+    const [msg] = await db.insert(messages)
       .values({
         ...insertMessage,
         isRead: false,
       })
       .returning();
-    return message;
+    return {
+      id: msg.id,
+      senderId: msg.senderId,
+      receiverId: msg.receiverId,
+      content: msg.content,
+      createdAt: msg.createdAt ? msg.createdAt.toISOString() : '',
+      isRead: Boolean(msg.isRead),
+    };
   }
 
   async getMessagesByUserId(userId: number): Promise<Message[]> {
-    return await db.select()
+    const rows = await db.select()
       .from(messages)
       .where(
         or(
@@ -336,10 +415,18 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(messages.createdAt));
+    return rows.map(m => ({
+      id: m.id,
+      senderId: m.senderId,
+      receiverId: m.receiverId,
+      content: m.content,
+      createdAt: m.createdAt ? m.createdAt.toISOString() : '',
+      isRead: Boolean(m.isRead),
+    }));
   }
 
   async getConversation(user1Id: number, user2Id: number): Promise<Message[]> {
-    return await db.select()
+    const rows = await db.select()
       .from(messages)
       .where(
         or(
@@ -353,7 +440,15 @@ export class DatabaseStorage implements IStorage {
           )
         )
       )
-      .orderBy(asc(messages.createdAt));
+      .orderBy(desc(messages.createdAt));
+    return rows.map(m => ({
+      id: m.id,
+      senderId: m.senderId,
+      receiverId: m.receiverId,
+      content: m.content,
+      createdAt: m.createdAt ? m.createdAt.toISOString() : '',
+      isRead: Boolean(m.isRead),
+    }));
   }
 
   async markMessageAsRead(id: number): Promise<Message | undefined> {
@@ -416,16 +511,8 @@ export class DatabaseStorage implements IStorage {
       .values({
         ...insertDoubt,
         helperId: null,
-        status: 'open',
+        status: 'open'
       })
-      .returning();
-    return doubt;
-  }
-
-  async updateDoubt(id: number, doubtData: Partial<Doubt>): Promise<Doubt | undefined> {
-    const [doubt] = await db.update(doubts)
-      .set(doubtData)
-      .where(eq(doubts.id, id))
       .returning();
     return doubt;
   }
@@ -436,19 +523,19 @@ export class DatabaseStorage implements IStorage {
     if (filters) {
       const conditions = [];
       
-      if (filters.status !== undefined) {
-        conditions.push(eq(doubts.status, filters.status));
+      if (filters.status !== undefined && filters.status !== null) {
+        conditions.push(eq(doubts.status, filters.status as 'open' | 'answered' | 'closed'));
       }
       
-      if (filters.studentId !== undefined) {
+      if (filters.studentId !== undefined && filters.studentId !== null) {
         conditions.push(eq(doubts.studentId, filters.studentId));
       }
       
-      if (filters.helperId !== undefined) {
+      if (filters.helperId !== undefined && filters.helperId !== null) {
         conditions.push(eq(doubts.helperId, filters.helperId));
       }
       
-      if (filters.subject !== undefined) {
+      if (filters.subject !== undefined && filters.subject !== null) {
         conditions.push(eq(doubts.subject, filters.subject));
       }
       
@@ -457,7 +544,8 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    return await query.orderBy(desc(doubts.createdAt));
+    const result = await query.orderBy(desc(doubts.createdAt));
+    return result;
   }
 
   async getRecentDoubts(limit: number): Promise<Doubt[]> {
@@ -487,6 +575,29 @@ export class DatabaseStorage implements IStorage {
       .from(doubts)
       .where(eq(doubts.subject, subject))
       .orderBy(desc(doubts.createdAt));
+  }
+
+  async updateDoubt(id: number, data: Partial<Doubt>): Promise<Doubt> {
+    const updateData: Partial<Doubt> = {};
+    
+    if (data.helperId !== undefined && data.helperId !== null) {
+      updateData.helperId = data.helperId;
+    }
+    
+    if (data.status !== undefined && data.status !== null) {
+      updateData.status = data.status as 'open' | 'answered' | 'closed';
+    }
+
+    const [updatedDoubt] = await db.update(doubts)
+      .set(updateData)
+      .where(eq(doubts.id, id))
+      .returning();
+      
+    if (!updatedDoubt) {
+      throw new Error(`Doubt with id ${id} not found`);
+    }
+    
+    return updatedDoubt;
   }
 
   // Answer operations

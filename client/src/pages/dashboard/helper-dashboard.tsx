@@ -26,6 +26,8 @@ import {
 import { StarRating } from "@/components/ui/star-rating";
 import { formatDistanceToNow } from "date-fns";
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
 export default function HelperDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("active");
@@ -77,7 +79,7 @@ export default function HelperDashboard() {
         <div className="flex flex-col flex-1">
           <Navbar />
           
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-6 ml-0 md:ml-64">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Helper Dashboard</h1>
@@ -176,6 +178,13 @@ export default function HelperDashboard() {
                     <div className="space-y-6">
                       {activeAssignments.map(assignment => (
                         <Card key={assignment.id} className="overflow-hidden">
+                          {assignment.photos && assignment.photos.length > 0 && (
+                            <img
+                              src={`${API_URL}${assignment.photos[0]}`}
+                              alt="Assignment Photo"
+                              className="w-full h-32 md:w-1/3 md:h-auto object-cover rounded-md mb-4 md:mb-0 md:mr-4"
+                            />
+                          )}
                           <div className="flex flex-col md:flex-row">
                             <div className="flex-1 p-6">
                               <div className="flex justify-between items-start">
@@ -309,6 +318,13 @@ export default function HelperDashboard() {
                         
                         return (
                           <Card key={assignment.id} className="overflow-hidden">
+                            {assignment.photos && assignment.photos.length > 0 && (
+                              <img
+                                src={`${API_URL}${assignment.photos[0]}`}
+                                alt="Assignment Photo"
+                                className="w-full h-32 md:w-1/3 md:h-auto object-cover rounded-md mb-4 md:mb-0 md:mr-4"
+                              />
+                            )}
                             <div className="flex flex-col md:flex-row">
                               <div className="flex-1 p-6">
                                 <div className="flex justify-between items-start">

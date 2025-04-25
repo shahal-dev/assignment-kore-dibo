@@ -52,16 +52,6 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, navigate] = useLocation();
   
-  // Redirect if already logged in
-  if (user) {
-    if (user.userType === 'student') {
-      navigate('/dashboard/student');
-    } else {
-      navigate('/dashboard/helper');
-    }
-    return null;
-  }
-
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -82,6 +72,16 @@ export default function AuthPage() {
     },
   });
 
+  // Redirect if already logged in
+  if (user) {
+    if (user.userType === 'student') {
+      navigate('/dashboard/student');
+    } else {
+      navigate('/dashboard/helper');
+    }
+    return null;
+  }
+
   const onLoginSubmit = (data: LoginFormData) => {
     loginMutation.mutate(data, {
       onSuccess: (user) => {
@@ -95,16 +95,14 @@ export default function AuthPage() {
   };
 
   const onRegisterSubmit = (data: RegisterFormData) => {
-    registerMutation.mutate(data, {
-      onSuccess: (user) => {
-        if (user.userType === 'student') {
-          navigate('/dashboard/student');
-        } else {
-          navigate('/dashboard/helper');
-        }
-      },
-    });
+    registerMutation.mutate(data);
   };
+
+  // Handle registration success
+  if (registerMutation.isSuccess) {
+    navigate('/verify');
+    return null;
+  }
 
   return (
     <>

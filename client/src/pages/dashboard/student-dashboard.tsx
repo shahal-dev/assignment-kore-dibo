@@ -60,7 +60,7 @@ export default function StudentDashboard() {
         <div className="flex flex-col flex-1">
           <Navbar />
           
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-6 ml-0 md:ml-64">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">My Dashboard</h1>

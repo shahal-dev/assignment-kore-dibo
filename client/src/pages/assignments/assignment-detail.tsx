@@ -42,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { StarRating } from "@/components/ui/star-rating";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow, format } from "date-fns";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 export default function AssignmentDetail() {
   const { id } = useParams();
@@ -412,6 +413,19 @@ export default function AssignmentDetail() {
                   <div className="prose max-w-none">
                     <p>{assignment.description}</p>
                   </div>
+                  {/* Assignment photos */}
+                  {assignment.photos && assignment.photos.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                      {assignment.photos.map((url) => (
+                        <img
+                          key={url}
+                          src={`${API_URL}${url}`}
+                          alt="Assignment Photo"
+                          className="object-cover w-full h-48 rounded-md"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               

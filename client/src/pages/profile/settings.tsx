@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/pages/dashboard/shared/navbar";
 import Sidebar from "@/pages/dashboard/shared/sidebar";
 import { Button } from "@/components/ui/button";
@@ -28,12 +29,12 @@ const profileFormSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
   bio: z.string().optional(),
   skills: z.string().optional(),
-  profileImage: z.string().url("Please enter a valid URL").optional(),
 });
 
 export default function Settings() {
   const { user, updateProfileMutation } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("profile");
   
   // Set up the form
@@ -43,10 +44,30 @@ export default function Settings() {
       fullName: user?.fullName || "",
       bio: user?.bio || "",
       skills: user?.skills ? user.skills.join(", ") : "",
-      profileImage: user?.profileImage || "",
     },
   });
   
+  // File upload handler for profile photo
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('profileImage', file);
+    try {
+      const res = await fetch('/api/user/photo', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const updatedUser = await res.json();
+      queryClient.setQueryData(['/api/user'], updatedUser);
+      toast({ title: 'Photo uploaded' });
+    } catch (error) {
+      toast({ title: 'Upload failed', variant: 'destructive' });
+    }
+  };
+
   // Form submission handler
   const onSubmit = (values: z.infer<typeof profileFormSchema>) => {
     // Process skills from comma-separated string to array
@@ -58,7 +79,6 @@ export default function Settings() {
       fullName: values.fullName,
       bio: values.bio,
       skills,
-      profileImage: values.profileImage,
     });
   };
   
@@ -70,11 +90,10 @@ export default function Settings() {
       
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar />
-        
         <div className="flex flex-col flex-1">
           <Navbar />
           
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-6 ml-0 md:ml-64">
             <div className="max-w-4xl mx-auto">
               <div className="mb-8">
                 <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
@@ -103,9 +122,10 @@ export default function Settings() {
                           <div className="flex flex-col md:flex-row md:items-start gap-6">
                             <div className="flex flex-col items-center">
                               <Avatar className="h-24 w-24">
-                                <AvatarImage src={form.watch("profileImage") || user?.profileImage} />
+                                <AvatarImage src={user?.profileImage} />
                                 <AvatarFallback>{getInitials(user?.fullName)}</AvatarFallback>
                               </Avatar>
+                              <input type="file" accept="image/*" onChange={handlePhotoUpload} className="mt-2" />
                             </div>
                             
                             <div className="flex-1 space-y-6">
@@ -120,23 +140,6 @@ export default function Settings() {
                                     </FormControl>
                                     <FormDescription>
                                       This is your public display name.
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              
-                              <FormField
-                                control={form.control}
-                                name="profileImage"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Profile Image URL</FormLabel>
-                                    <FormControl>
-                                      <Input {...field} placeholder="https://example.com/image.jpg" />
-                                    </FormControl>
-                                    <FormDescription>
-                                      Enter a URL for your profile picture.
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>

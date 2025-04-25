@@ -4,7 +4,6 @@ import HeroSection from "@/components/landing/hero-section";
 import Stats from "@/components/landing/stats";
 import HowItWorks from "@/components/landing/how-it-works";
 import FeaturedHelpers from "@/components/landing/featured-helpers";
-import BrowseAssignmentsSection from "@/components/landing/browse-assignments-section";
 import BecomeHelper from "@/components/landing/become-helper";
 import Testimonials from "@/components/landing/testimonials";
 import Faq from "@/components/landing/faq";
@@ -45,7 +44,6 @@ export default function HomePage() {
           <Stats />
           <HowItWorks />
           <FeaturedHelpers />
-          <BrowseAssignmentsSection />
           <BecomeHelper />
           <Testimonials />
           <Faq />

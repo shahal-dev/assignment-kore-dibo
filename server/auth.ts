@@ -1,12 +1,16 @@
+import { config } from 'dotenv';
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import express, { Express } from "express";
 import session from "express-session";
+
+config();
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import { sendVerificationEmail } from "./email";
 
 declare global {
   namespace Express {
@@ -31,7 +35,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "assignment-kore-dibo-secret",
+    secret: process.env.JWT_SECRET || "assignment-kore-dibo-secret",
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -41,9 +45,13 @@ export function setupAuth(app: Express) {
   };
 
   app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
-  app.use(passport.initialize());
-  app.use(passport.session());
+  const sessionMiddleware = session(sessionSettings);
+  const passportInitialize = passport.initialize();
+  const passportSession = passport.session();
+  
+  app.use((req, res, next) => sessionMiddleware(req, res, next));
+  app.use((req, res, next) => passportInitialize(req, res, next));
+  app.use((req, res, next) => passportSession(req, res, next));
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -71,13 +79,25 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
+    console.log("[DEBUG] Registration request:", req.body);
     try {
       const validatedData = insertUserSchema.parse(req.body);
+      console.log("[DEBUG] Validated data:", validatedData);
 
-      // Check if unverified user exists
-      const existingUser = await storage.getUserByEmail(validatedData.email);
-      if (existingUser?.verified) {
+      // Check if user exists with same email or username
+      const [existingEmail, existingUsername] = await Promise.all([
+        storage.getUserByEmail(validatedData.email),
+        storage.getUserByUsername(validatedData.username)
+      ]);
+      console.log("[DEBUG] Existing email user:", existingEmail);
+      console.log("[DEBUG] Existing username user:", existingUsername);
+      
+      if (existingEmail?.isVerified) {
         return res.status(400).json({ message: "Email already registered" });
+      }
+      
+      if (existingUsername) {
+        return res.status(400).json({ message: "Username already taken" });
       }
 
       // Generate verification code
@@ -91,6 +111,7 @@ export function setupAuth(app: Express) {
       });
 
       // Store user data temporarily
+      console.log("[DEBUG] Creating unverified user...");
       await storage.createUnverifiedUser({
         ...validatedData,
         password: await hashPassword(validatedData.password),
@@ -101,6 +122,7 @@ export function setupAuth(app: Express) {
 
       res.status(200).json({ message: "Verification code sent" });
     } catch (error) {
+      console.error("[DEBUG] Registration error:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid user data", errors: error.errors });
       }
@@ -174,7 +196,17 @@ export function setupAuth(app: Express) {
       }
 
       // Create verified user
-      const user = await storage.createVerifiedUser(userData);
+      // Create the actual user
+      const user = await storage.createUser({
+        email: userData.email,
+        username: userData.username,
+        fullName: userData.fullName,
+        password: userData.password,
+        userType: userData.userType,
+        bio: userData.bio || undefined,
+        skills: userData.skills || undefined,
+        profileImage: userData.profileImage || undefined
+      });
       await storage.markVerificationCodeUsed(verificationCode.id);
 
       // Log user in using a promise wrapper

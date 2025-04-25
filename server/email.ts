@@ -1,19 +1,21 @@
-
+import { config } from 'dotenv';
 import nodemailer from 'nodemailer';
 
+config();
+
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
 });
 
 export async function sendVerificationEmail(email: string, code: string) {
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: process.env.SMTP_USER,
     to: email,
     subject: "Verify your email - Assignment Kore Dibo",
     html: `

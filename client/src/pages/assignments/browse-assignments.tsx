@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { 
   Search, 
   Filter, 
@@ -28,6 +28,8 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 const categories = [
   "All Categories",
@@ -61,6 +63,9 @@ const deadlineRanges = [
 
 export default function BrowseAssignments() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
+  useEffect(() => { if (!user) navigate('/login'); }, [user, navigate]);
+  if (!user) return null;
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState("All Categories");
   const [budget, setBudget] = useState("any");
@@ -306,6 +311,13 @@ function AssignmentCard({ assignment }) {
   return (
     <Card className="h-full flex flex-col">
       <CardContent className="p-6 flex-1 flex flex-col">
+        {assignment.photos && assignment.photos.length > 0 && (
+          <img
+            src={`${API_URL}${assignment.photos[0]}`}
+            alt="Assignment Photo"
+            className="w-full h-32 object-cover rounded-md mb-4"
+          />
+        )}
         <div className="flex justify-between items-start mb-4">
           <h3 className="text-lg font-semibold text-gray-900">
             <Link href={`/assignments/${assignment.id}`}>

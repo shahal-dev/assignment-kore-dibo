@@ -42,7 +42,7 @@ export default function Reviews() {
         <div className="flex flex-col flex-1">
           <Navbar />
           
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-6 ml-0 md:ml-64">
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-gray-900">My Reviews</h1>
               <p className="text-gray-600">Reviews and feedback from students</p>

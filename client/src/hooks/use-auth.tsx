@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useState } from "react";
 import {
   useQuery,
   useMutation,
@@ -13,10 +13,12 @@ type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
+  pendingVerificationEmail: string | null;
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, RegisterData>;
+  registerMutation: UseMutationResult<{ message: string }, Error, RegisterData>;
   updateProfileMutation: UseMutationResult<SelectUser, Error, UpdateProfileData>;
+  setPendingVerificationEmail: (email: string | null) => void;
 };
 
 type LoginData = {
@@ -45,6 +47,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   
   const {
     data: user,
@@ -100,14 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Remove confirmPassword before sending to API
       const { confirmPassword, ...registerData } = data;
       const res = await apiRequest("POST", "/api/register", registerData);
-      return await res.json();
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || 'Registration failed');
+      return result;
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (response: { message: string }, variables) => {
+      setPendingVerificationEmail(variables.email);
       toast({
         title: "Registration successful",
-        description: `Welcome to Assignment Kore Dibo, ${user.fullName}!`,
+        description: "Please check your email for the verification code.",
       });
+      // Explicitly navigate to verify page
+      window.location.href = '/verify';
     },
     onError: (error: Error) => {
       toast({
@@ -164,6 +171,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: user ?? null,
         isLoading,
         error,
+        pendingVerificationEmail,
+        setPendingVerificationEmail,
         loginMutation,
         logoutMutation,
         registerMutation,
