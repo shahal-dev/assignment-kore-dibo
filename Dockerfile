@@ -12,6 +12,8 @@ RUN yarn build
 
 # Stage 2: Run only the built output
 FROM node:20-alpine AS runner
+# Production mode
+ENV NODE_ENV=production
 WORKDIR /app
 
 # Copy built artifacts

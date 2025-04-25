@@ -1,5 +1,7 @@
 import { config } from 'dotenv';
 import express, { type Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -50,13 +52,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
+  // If static build exists, serve it; otherwise, fall back to Vite in dev
+  const staticDir = path.resolve(import.meta.dirname, "..", "public");
+  if (fs.existsSync(staticDir)) {
     serveStatic(app);
+  } else {
+    await setupVite(app, server);
   }
 
   // Bind to the port set by environment (e.g. Render's PORT) or default to 4000
