@@ -20,6 +20,8 @@ WORKDIR /app
 COPY --from=builder /app/dist ./dist
 # Copy runtime dependencies
 COPY --from=builder /app/node_modules ./node_modules
+# Copy migrations for Drizzle
+COPY --from=builder /app/drizzle ./drizzle
 
 # Create & switch to non-root user
 RUN addgroup -S appgroup \
