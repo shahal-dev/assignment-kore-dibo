@@ -61,13 +61,15 @@ export default function VerifyPage() {
       setPendingVerificationEmail(null);
       toast({
         title: "Email verified",
-        description: "Your account has been verified successfully.",
+        description: "Your account has been verified successfully. Redirecting...",
       });
-      if (user.userType === 'student') {
-        navigate('/dashboard/student');
-      } else {
-        navigate('/dashboard/helper');
-      }
+      setTimeout(() => {
+        if (user.userType === 'student') {
+          navigate('/dashboard/student');
+        } else {
+          navigate('/dashboard/helper');
+        }
+      }, 1500); // 1.5s delay so user sees the toast
     },
     onError: (error: Error) => {
       toast({

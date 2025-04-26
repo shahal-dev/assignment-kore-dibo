@@ -1,4 +1,7 @@
 import { Bell, MessageSquare, Menu, X } from "lucide-react";
+import NotificationBadge from "@/components/ui/notification-badge";
+import NotificationCenter from "@/components/ui/notification-center";
+import { useNotifications } from "@/hooks/use-notifications";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -35,6 +38,11 @@ export default function Navbar() {
     (count, conversation) => count + conversation.unreadCount, 
     0
   ) || 0;
+
+  // Notifications
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const { notifications } = useNotifications(user?.id);
+  const unreadNotifications = notifications.filter(n => !n.read).length;
   
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
@@ -79,6 +87,12 @@ export default function Navbar() {
                   )}
                 </Button>
               </Link>
+
+              {/* Notification Bell */}
+              <div className="relative">
+                <NotificationBadge count={unreadNotifications} onClick={() => setNotificationOpen(v => !v)} />
+                <NotificationCenter open={notificationOpen} onClose={() => setNotificationOpen(false)} />
+              </div>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

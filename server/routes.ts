@@ -22,9 +22,31 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 console.log("!!! ROUTES FILE LOADED AT", new Date().toISOString());
+import * as notifications from './notifications';
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication
   setupAuth(app);
+
+  // --- Notification API ---
+  app.get('/api/notifications', async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: 'Unauthorized' });
+    const result = await notifications.getNotifications(req.user.id);
+    res.json(result);
+  });
+
+  app.post('/api/notifications/mark-read', async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: 'Unauthorized' });
+    const { notificationId } = req.body;
+    await notifications.markNotificationRead(notificationId);
+    res.json({ success: true });
+  });
+
+  app.post('/api/notifications/mark-all-read', async (req, res) => {
+    if (!req.isAuthenticated() || !req.user) return res.status(401).json({ message: 'Unauthorized' });
+    await notifications.markAllNotificationsRead(req.user.id);
+    res.json({ success: true });
+  });
 
 // Helper middleware to check if user is authenticated
   const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {

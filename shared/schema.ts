@@ -135,6 +135,17 @@ export const answers = pgTable("answers", {
   isAccepted: boolean("is_accepted").default(false),
 });
 
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  link: text("link"),
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert Schemas
 export const insertAssignmentSchema = createInsertSchema(assignments)
   .pick({
@@ -245,6 +256,16 @@ export const sendMessageSchema = z.object({
 export type SendMessage = z.infer<typeof sendMessageSchema>;
 
 // Types
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+
+export const insertNotificationSchema = createInsertSchema(notifications)
+  .pick({
+    userId: true,
+    type: true,
+    message: true,
+    link: true,
+  });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
