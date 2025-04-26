@@ -111,7 +111,7 @@ export default function AuthPage() {
         <meta name="description" content="Sign in to your account or register to get started with Assignment Kore Dibo" />
       </Helmet>
       
-      <div className="flex min-h-screen bg-gray-100">
+      <div className="flex min-h-screen bg-gradient-to-r from-pink-200 via-purple-200 to-blue-200">
         {/* Left Column: Auth Form */}
         <div className="flex flex-col justify-center flex-1 px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
           <div className="w-full max-w-sm mx-auto lg:w-96">
