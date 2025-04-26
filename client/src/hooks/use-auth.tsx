@@ -113,8 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Registration successful",
         description: "Please check your email for the verification code.",
       });
-      // Explicitly navigate to verify page
-      window.location.href = '/verify';
+      // Use router navigation instead of window.location.href to preserve state
+      if (typeof window !== 'undefined' && window.history && window.history.pushState) {
+        window.history.pushState({}, '', '/verify');
+        // Optionally, dispatch a popstate event so SPA routers update
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     },
     onError: (error: Error) => {
       toast({
