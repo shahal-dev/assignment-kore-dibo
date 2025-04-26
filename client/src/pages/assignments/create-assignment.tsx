@@ -36,7 +36,7 @@ import {
 // Form schema
 const formSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters."),
-  description: z.string().min(30, "Description must be at least 30 characters."),
+  description: z.string(),
   budget: z.string().refine(val => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Budget must be a positive number.",
   }),
