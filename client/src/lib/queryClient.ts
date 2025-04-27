@@ -1,5 +1,8 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const CACHE_TIME = 1000 * 60 * 5; // 5 minutes
+const STALE_TIME = 1000 * 30; // 30 seconds
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -14,7 +17,11 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      "Cache-Control": "public, max-age=300", // 5 minutes cache
+      Pragma: "no-cache",
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -28,9 +35,14 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+  async ({ queryKey, signal }) => {
     const res = await fetch(queryKey[0] as string, {
       credentials: "include",
+      signal, // Support for query cancellation
+      headers: {
+        "Cache-Control": "public, max-age=300",
+        Pragma: "no-cache",
+      },
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -46,12 +58,17 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      refetchOnWindowFocus: true, // Enable to keep data fresh
+      staleTime: STALE_TIME,
+      gcTime: CACHE_TIME,
+      retry: 1, // Retry once on failure
+      retryDelay: 1000, // Wait 1 second before retry
+      networkMode: "offlineFirst" // Support offline mode
     },
     mutations: {
-      retry: false,
+      retry: 1,
+      retryDelay: 1000,
+      networkMode: "offlineFirst",
     },
   },
 });
